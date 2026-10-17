@@ -1,0 +1,14 @@
+Bed
+Cabinet
+Chair
+Door
+Electric Fan
+Laptop
+Monitor
+Person
+Refrigerator
+Sink
+Sofa
+Table
+Television
+Toilet
