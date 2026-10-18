@@ -64,6 +64,26 @@ void main() {
       expect(await repository.load(), isNull);
     });
 
+    test('empty stored token returns null and deletes the orphaned user entry',
+        () async {
+      await repository.save(token: '', user: buildUser());
+      expect(await store.read('blindspot_user'), isNotNull);
+
+      expect(await repository.load(), isNull);
+      // The profile must not outlive its token on the device.
+      expect(await store.read('blindspot_user'), isNull);
+    });
+
+    test('missing stored token returns null and deletes the user entry',
+        () async {
+      await repository.save(token: 'tok-123', user: buildUser());
+      await store.delete('blindspot_token');
+      expect(await store.read('blindspot_user'), isNotNull);
+
+      expect(await repository.load(), isNull);
+      expect(await store.read('blindspot_user'), isNull);
+    });
+
     test('corrupt stored user JSON returns null and deletes the bad entry',
         () async {
       await repository.save(token: 'tok-123', user: buildUser());

@@ -17,6 +17,8 @@ class CachedSession {
 /// [load] never throws: corrupt or foreign stored JSON (or a failing
 /// keychain read) deletes the bad user entry and reports signed-out,
 /// so an airplane-mode relaunch lands on Welcome instead of crashing.
+/// A missing/empty token also deletes an orphaned user entry, so the
+/// cached profile never outlives the token on the device.
 class SessionRepository {
   SessionRepository(SecureStore store)
       : _store = store,
@@ -33,10 +35,16 @@ class SessionRepository {
     try {
       final token = await _tokens.read();
       final userJson = await _store.read(userKey);
-      if (token == null ||
-          token.isEmpty ||
-          userJson == null ||
-          userJson.isEmpty) {
+      if (token == null || token.isEmpty) {
+        // No usable token: drop any orphaned user entry too, so the cached
+        // profile (name/email/contact) never outlives the token on the
+        // device — mirroring the corrupt-JSON path below.
+        if (userJson != null && userJson.isNotEmpty) {
+          await _store.delete(userKey);
+        }
+        return null;
+      }
+      if (userJson == null || userJson.isEmpty) {
         return null;
       }
       final decoded = jsonDecode(userJson);
