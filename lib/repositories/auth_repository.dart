@@ -25,11 +25,17 @@ abstract class AuthRepository {
 /// Every call retries once on a network-level failure (see
 /// [withNetworkRetry]); HTTP errors surface as [ApiException] carrying the
 /// server's `detail` message and its status code — the screens own the
-/// user-facing copy.
+/// user-facing copy. [onRetry] fires exactly once immediately before the
+/// single retry attempt, so the provider layer can surface the
+/// server-waking state during a Render cold start.
 class ApiAuthRepository implements AuthRepository {
-  ApiAuthRepository(this._client);
+  ApiAuthRepository(this._client, {this.onRetry});
 
   final ApiClient _client;
+
+  /// Invoked only when the first attempt failed with a network-level
+  /// [ApiException] (`statusCode == null`) and one retry is about to run.
+  final void Function()? onRetry;
 
   @override
   Future<AuthResult> signup({
@@ -58,7 +64,7 @@ class ApiAuthRepository implements AuthRepository {
         },
       );
       return AuthResult.fromJson(json);
-    });
+    }, onRetry: onRetry);
   }
 
   @override
@@ -69,7 +75,7 @@ class ApiAuthRepository implements AuthRepository {
           body: <String, dynamic>{'email': email, 'password': password},
         );
         return AuthResult.fromJson(json);
-      });
+      }, onRetry: onRetry);
 }
 
 /// Test double for [AuthRepository] (widget/provider tests): canned success

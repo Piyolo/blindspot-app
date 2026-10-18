@@ -194,6 +194,86 @@ void main() {
     );
   });
 
+  test('login onRetry fires exactly once when the first attempt is a network error',
+      () async {
+    var calls = 0;
+    var retries = 0;
+    final repo = ApiAuthRepository(
+      ApiClient(baseUrl: 'https://example.test', client: MockClient((request) async {
+        calls += 1;
+        if (calls == 1) {
+          throw http.ClientException('connection reset');
+        }
+        return http.Response(authJson, 200);
+      })),
+      onRetry: () => retries += 1,
+    );
+
+    await repo.login(email: 'ana@example.com', password: 'password1');
+
+    expect(calls, 2);
+    expect(retries, 1);
+  });
+
+  test('login onRetry does not fire on first-attempt success', () async {
+    var retries = 0;
+    final repo = ApiAuthRepository(
+      ApiClient(baseUrl: 'https://example.test', client: MockClient((request) async =>
+          http.Response(authJson, 200))),
+      onRetry: () => retries += 1,
+    );
+
+    await repo.login(email: 'ana@example.com', password: 'password1');
+
+    expect(retries, 0);
+  });
+
+  test('login onRetry does not fire on 401, 429, or 500', () async {
+    for (final status in <int>[401, 429, 500]) {
+      var calls = 0;
+      var retries = 0;
+      final repo = ApiAuthRepository(
+        ApiClient(baseUrl: 'https://example.test', client: MockClient((request) async {
+          calls += 1;
+          return http.Response('{"detail": "Request failed."}', status);
+        })),
+        onRetry: () => retries += 1,
+      );
+
+      await expectLater(
+        repo.login(email: 'ana@example.com', password: 'password1'),
+        throwsA(isA<ApiException>().having((e) => e.statusCode, 'statusCode', status)),
+      );
+      expect(calls, 1);
+      expect(retries, 0);
+    }
+  });
+
+  test('signup onRetry does not fire on 409', () async {
+    var calls = 0;
+    var retries = 0;
+    final repo = ApiAuthRepository(
+      ApiClient(baseUrl: 'https://example.test', client: MockClient((request) async {
+        calls += 1;
+        return http.Response(
+            '{"detail": "This email is already registered. Try logging in."}', 409);
+      })),
+      onRetry: () => retries += 1,
+    );
+
+    await expectLater(
+      repo.signup(
+        name: 'Ana Cruz',
+        email: 'ana@example.com',
+        password: 'password1',
+        contactNumber: '09171234567',
+      ),
+      throwsA(isA<ApiException>().having((e) => e.statusCode, 'statusCode', 409)),
+    );
+    expect(calls, 1);
+    expect(retries, 0);
+  });
+
   test('MockAuthRepository serves a canned success and can be set to fail',
       () async {
     final ok = MockAuthRepository();

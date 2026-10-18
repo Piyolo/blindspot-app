@@ -141,6 +141,59 @@ void main() {
     );
   });
 
+  test('updateProfile onRetry fires exactly once when the first attempt is a network error',
+      () async {
+    var calls = 0;
+    var retries = 0;
+    final repo = ApiProfileRepository(
+      ApiClient(baseUrl: 'https://example.test', client: MockClient((request) async {
+        calls += 1;
+        if (calls == 1) {
+          throw http.ClientException('connection reset');
+        }
+        return http.Response(meJson, 200);
+      })),
+      onRetry: () => retries += 1,
+    );
+
+    await repo.updateProfile(name: 'Ana Cruz');
+
+    expect(calls, 2);
+    expect(retries, 1);
+  });
+
+  test('updateProfile onRetry does not fire on first-attempt success', () async {
+    var retries = 0;
+    final repo = ApiProfileRepository(
+      ApiClient(baseUrl: 'https://example.test', client: MockClient((request) async =>
+          http.Response(meJson, 200))),
+      onRetry: () => retries += 1,
+    );
+
+    await repo.updateProfile(name: 'Ana Cruz');
+
+    expect(retries, 0);
+  });
+
+  test('updateProfile onRetry does not fire on 401', () async {
+    var calls = 0;
+    var retries = 0;
+    final repo = ApiProfileRepository(
+      ApiClient(baseUrl: 'https://example.test', client: MockClient((request) async {
+        calls += 1;
+        return http.Response('{"detail": "Not authenticated"}', 401);
+      })),
+      onRetry: () => retries += 1,
+    );
+
+    await expectLater(
+      repo.updateProfile(name: 'Ana Cruz'),
+      throwsA(isA<ApiException>().having((e) => e.statusCode, 'statusCode', 401)),
+    );
+    expect(calls, 1);
+    expect(retries, 0);
+  });
+
   test('MockProfileRepository serves a canned success and can be set to fail',
       () async {
     final ok = MockProfileRepository();

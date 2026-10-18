@@ -26,11 +26,16 @@ abstract class ProfileRepository {
 /// Every call retries once on a network-level failure (see
 /// [withNetworkRetry]); HTTP errors surface as [ApiException] carrying the
 /// server's `detail` message and its status code. Passwords are passed
-/// through to the request only — never logged or stored.
+/// through to the request only — never logged or stored. [onRetry] fires
+/// exactly once immediately before the single retry attempt.
 class ApiProfileRepository implements ProfileRepository {
-  ApiProfileRepository(this._client);
+  ApiProfileRepository(this._client, {this.onRetry});
 
   final ApiClient _client;
+
+  /// Invoked only when the first attempt failed with a network-level
+  /// [ApiException] (`statusCode == null`) and one retry is about to run.
+  final void Function()? onRetry;
 
   @override
   Future<User> updateProfile({String? name, String? contactNumber}) async {
@@ -51,7 +56,7 @@ class ApiProfileRepository implements ProfileRepository {
     return withNetworkRetry(() async {
       final json = await _client.put(ApiPaths.me, body: body);
       return User.fromJson(json['user'] as Map<String, dynamic>);
-    });
+    }, onRetry: onRetry);
   }
 
   @override
@@ -67,7 +72,7 @@ class ApiProfileRepository implements ProfileRepository {
             'new_password': newPassword,
           },
         );
-      });
+      }, onRetry: onRetry);
 }
 
 /// Test double for [ProfileRepository] (widget/provider tests): canned
