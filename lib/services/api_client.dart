@@ -16,7 +16,7 @@ class ApiClient {
         _timeout = timeout;
 
   static const String defaultBaseUrl =
-      String.fromEnvironment('API_BASE_URL', defaultValue: 'https://blindspot-api.onrender.com');
+      String.fromEnvironment('API_BASE_URL', defaultValue: 'https://blindspot-api-dkch.onrender.com');
 
   final http.Client _client;
   final String _baseUrl;
