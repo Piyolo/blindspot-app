@@ -274,6 +274,80 @@ void main() {
     expect(retries, 0);
   });
 
+  test(
+      'signup maps malformed 2xx payloads to ApiException and never retries',
+      () async {
+    final malformedBodies = <String>[
+      '{"user": $userJson}', // missing access_token
+      '{"access_token": "tok-abc", "user": 5}', // user not an object
+      '', // empty body
+      '{"access_token": "tok-abc", "user"', // truncated JSON
+    ];
+    for (final body in malformedBodies) {
+      var calls = 0;
+      var retries = 0;
+      final repo = ApiAuthRepository(
+        ApiClient(
+          baseUrl: 'https://example.test',
+          client: MockClient((request) async {
+            calls += 1;
+            return http.Response(body, 201);
+          }),
+        ),
+        onRetry: () => retries += 1,
+      );
+
+      await expectLater(
+        repo.signup(
+          name: 'Ana Cruz',
+          email: 'ana@example.com',
+          password: 'password1',
+          contactNumber: '09171234567',
+        ),
+        throwsA(isA<ApiException>()
+            .having((e) => e.statusCode, 'statusCode', isNotNull)
+            .having((e) => e.message, 'message', isNotEmpty)),
+        reason: 'body: $body',
+      );
+      expect(calls, 1, reason: 'no retry for body: $body');
+      expect(retries, 0, reason: 'no onRetry for body: $body');
+    }
+  });
+
+  test('login maps malformed 2xx payloads to ApiException and never retries',
+      () async {
+    final malformedBodies = <String>[
+      '{"user": $userJson}', // missing access_token
+      '{"access_token": "tok-abc"}', // missing user
+      '', // empty body
+      '{"access_token": "tok-abc", "user"', // truncated JSON
+    ];
+    for (final body in malformedBodies) {
+      var calls = 0;
+      var retries = 0;
+      final repo = ApiAuthRepository(
+        ApiClient(
+          baseUrl: 'https://example.test',
+          client: MockClient((request) async {
+            calls += 1;
+            return http.Response(body, 200);
+          }),
+        ),
+        onRetry: () => retries += 1,
+      );
+
+      await expectLater(
+        repo.login(email: 'ana@example.com', password: 'password1'),
+        throwsA(isA<ApiException>()
+            .having((e) => e.statusCode, 'statusCode', isNotNull)
+            .having((e) => e.message, 'message', isNotEmpty)),
+        reason: 'body: $body',
+      );
+      expect(calls, 1, reason: 'no retry for body: $body');
+      expect(retries, 0, reason: 'no onRetry for body: $body');
+    }
+  });
+
   test('MockAuthRepository serves a canned success and can be set to fail',
       () async {
     final ok = MockAuthRepository();

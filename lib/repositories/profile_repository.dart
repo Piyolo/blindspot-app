@@ -13,8 +13,10 @@ abstract class ProfileRepository {
   /// unchanged by the server.
   Future<User> updateProfile({String? name, String? contactNumber});
 
-  /// Changes the signed-in user's password; resolves when the server
-  /// confirms (`{"ok": true}`).
+  /// Changes the signed-in user's password; resolves only when the server
+  /// confirms with a `{"ok": true}` body — any other 2xx body (`ok` false,
+  /// null, missing, non-object, empty or malformed) raises [ApiException]
+  /// rather than silently reporting a password change that did not happen.
   Future<void> changePassword({
     required String currentPassword,
     required String newPassword,
@@ -65,13 +67,20 @@ class ApiProfileRepository implements ProfileRepository {
     required String newPassword,
   }) =>
       withNetworkRetry(() async {
-        await _client.put(
+        final json = await _client.put(
           ApiPaths.mePassword,
           body: <String, dynamic>{
             'current_password': currentPassword,
             'new_password': newPassword,
           },
         );
+        // Resolve only on an explicit confirmation: the transport succeeded
+        // (a non-2xx would already have thrown), so 200 here is the actual
+        // response status of the ok-check failing.
+        if (json['ok'] != true) {
+          throw const ApiException(
+              'Password change not confirmed', statusCode: 200);
+        }
       }, onRetry: onRetry);
 }
 

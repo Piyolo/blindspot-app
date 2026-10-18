@@ -80,14 +80,14 @@ void main() {
     var calls = 0;
     final repo = repoWith(MockClient((request) async {
       calls += 1;
-      return http.Response('{"detail": "Not authenticated"}', 401);
+      return http.Response('{"detail": "Invalid or expired token"}', 401);
     }));
 
     await expectLater(
       repo.updateProfile(name: 'Ana Cruz'),
       throwsA(isA<ApiException>()
           .having((e) => e.statusCode, 'statusCode', 401)
-          .having((e) => e.message, 'message', 'Not authenticated')),
+          .having((e) => e.message, 'message', 'Invalid or expired token')),
     );
     expect(calls, 1);
   });
@@ -181,7 +181,7 @@ void main() {
     final repo = ApiProfileRepository(
       ApiClient(baseUrl: 'https://example.test', client: MockClient((request) async {
         calls += 1;
-        return http.Response('{"detail": "Not authenticated"}', 401);
+        return http.Response('{"detail": "Invalid or expired token"}', 401);
       })),
       onRetry: () => retries += 1,
     );
@@ -192,6 +192,126 @@ void main() {
     );
     expect(calls, 1);
     expect(retries, 0);
+  });
+
+  test('changePassword throws ApiException when the server returns ok:false',
+      () async {
+    var calls = 0;
+    final repo = repoWith(MockClient((request) async {
+      calls += 1;
+      return http.Response('{"ok": false}', 200);
+    }));
+
+    await expectLater(
+      repo.changePassword(
+          currentPassword: 'oldpass12', newPassword: 'newpass12'),
+      throwsA(isA<ApiException>()
+          .having((e) => e.statusCode, 'statusCode', 200)
+          .having((e) => e.message, 'message', isNotEmpty)),
+    );
+    expect(calls, 1);
+  });
+
+  test('changePassword throws ApiException when ok is missing ({})', () async {
+    var calls = 0;
+    final repo = repoWith(MockClient((request) async {
+      calls += 1;
+      return http.Response('{}', 200);
+    }));
+
+    await expectLater(
+      repo.changePassword(
+          currentPassword: 'oldpass12', newPassword: 'newpass12'),
+      throwsA(isA<ApiException>()
+          .having((e) => e.statusCode, 'statusCode', 200)
+          .having((e) => e.message, 'message', isNotEmpty)),
+    );
+    expect(calls, 1);
+  });
+
+  test('changePassword throws ApiException on an empty response body', () async {
+    var calls = 0;
+    final repo = repoWith(MockClient((request) async {
+      calls += 1;
+      return http.Response('', 200);
+    }));
+
+    await expectLater(
+      repo.changePassword(
+          currentPassword: 'oldpass12', newPassword: 'newpass12'),
+      throwsA(isA<ApiException>()
+          .having((e) => e.statusCode, 'statusCode', 200)
+          .having((e) => e.message, 'message', isNotEmpty)),
+    );
+    expect(calls, 1);
+  });
+
+  test(
+      'changePassword throws ApiException on ok:null, a non-object body, and malformed JSON without retrying',
+      () async {
+    final bodies = <String>[
+      '{"ok": null}', // null flag
+      '[1, 2]', // non-object body
+      '{"ok": tr', // truncated JSON
+    ];
+    for (final body in bodies) {
+      var calls = 0;
+      var retries = 0;
+      final repo = ApiProfileRepository(
+        ApiClient(
+          baseUrl: 'https://example.test',
+          client: MockClient((request) async {
+            calls += 1;
+            return http.Response(body, 200);
+          }),
+        ),
+        onRetry: () => retries += 1,
+      );
+
+      await expectLater(
+        repo.changePassword(
+            currentPassword: 'oldpass12', newPassword: 'newpass12'),
+        throwsA(isA<ApiException>()
+            .having((e) => e.statusCode, 'statusCode', isNotNull)
+            .having((e) => e.message, 'message', isNotEmpty)),
+        reason: 'body: $body',
+      );
+      expect(calls, 1, reason: 'no retry for body: $body');
+      expect(retries, 0, reason: 'no onRetry for body: $body');
+    }
+  });
+
+  test('updateProfile maps malformed 2xx payloads to ApiException and never retries',
+      () async {
+    final malformedBodies = <String>[
+      '', // empty body: no user object
+      '{"user": {"id": 7}}', // user missing required fields
+      '{"user": {', // truncated JSON
+    ];
+    for (final body in malformedBodies) {
+      var calls = 0;
+      var retries = 0;
+      final repo = ApiProfileRepository(
+        ApiClient(
+          baseUrl: 'https://example.test',
+          client: MockClient((request) async {
+            calls += 1;
+            return http.Response(body, 200);
+          }),
+        ),
+        onRetry: () => retries += 1,
+      );
+
+      await expectLater(
+        repo.updateProfile(name: 'Ana Cruz'),
+        throwsA(isA<ApiException>()
+            .having((e) => e.statusCode, 'statusCode', isNotNull)
+            .having((e) => e.message, 'message', isNotEmpty)),
+        reason: 'body: $body',
+      );
+      expect(calls, 1, reason: 'no retry for body: $body');
+      expect(retries, 0, reason: 'no onRetry for body: $body');
+    }
   });
 
   test('MockProfileRepository serves a canned success and can be set to fail',
