@@ -150,7 +150,7 @@ class CopyFil {
       'Maglagay ng tamang contact number (7 hanggang 15 na numero).';
   static const String genericError = 'May problema. Subukan ulit.';
   static const String passwordLabel = 'Password';
-  static const String confirmPasswordLabel = 'Confirm password';
+  static const String confirmPasswordLabel = 'Kumpirmahin ang password';
   static const String confirmPasswordField =
       'Confirm password field. Nakatago ang mga karakter.';
   static const String passwordMismatch = 'Hindi tugma ang mga password.';

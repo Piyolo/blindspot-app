@@ -85,7 +85,22 @@ class AuthProvider extends ChangeNotifier {
       return;
     }
     _lastError = null;
-    scheduleMicrotask(notifyListeners);
+    scheduleMicrotask(() {
+      // The microtask can outlive the provider (a screen disposing in the
+      // same turn), and notifying a disposed ChangeNotifier throws in debug.
+      if (_disposed) {
+        return;
+      }
+      notifyListeners();
+    });
+  }
+
+  bool _disposed = false;
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 
   /// True while a login/signup request is in flight; screens disable

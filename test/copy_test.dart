@@ -126,7 +126,7 @@ void main() {
     'genericError': 'May problema. Subukan ulit.',
     // Phase-1 additions, fix round 2 (pinned)
     'passwordLabel': 'Password',
-    'confirmPasswordLabel': 'Confirm password',
+    'confirmPasswordLabel': 'Kumpirmahin ang password',
     'confirmPasswordField': 'Confirm password field. Nakatago ang mga karakter.',
     'passwordMismatch': 'Hindi tugma ang mga password.',
     'emailInvalid': 'Maglagay ng tamang email address.',
