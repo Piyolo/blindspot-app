@@ -637,4 +637,21 @@ void main() {
       expect(reloaded.user.contactNumber, '09181112222');
     },
   );
+
+  test(
+    'replaceUser never throws and still updates memory when the store fails',
+    () async {
+      final provider = AuthProvider(
+        auth: repo,
+        session: SessionRepository(ThrowingSecureStore()),
+        client: client,
+      );
+      await provider.login(email: 'ana@example.com', password: 'password1');
+
+      await provider.replaceUser(buildUser(name: 'Ana Santos')); // must not throw
+
+      expect(provider.user?.name, 'Ana Santos');
+      expect(client.authToken, isNotNull);
+    },
+  );
 }

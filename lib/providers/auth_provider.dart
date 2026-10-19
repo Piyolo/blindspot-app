@@ -225,15 +225,20 @@ class AuthProvider extends ChangeNotifier {
   }
 
   /// Applies an updated user (e.g. after a profile edit) without touching
-  /// the token: persists the new user into the session store (keeping the
-  /// existing token) and notifies listeners.
+  /// the token: updates the in-memory user and notifies listeners, then
+  /// persists the new user into the session store (keeping the existing
+  /// token) best-effort — a failing store never fails a successful edit.
   Future<void> replaceUser(User user) async {
     final token = _client.authToken;
-    if (token != null) {
-      await _session.save(token: token, user: user);
-    }
     _user = user;
     notifyListeners();
+    if (token != null) {
+      try {
+        await _session.save(token: token, user: user);
+      } catch (_) {
+        // Best-effort: the in-memory session is already updated.
+      }
+    }
   }
 
   /// Handles a server-side rejection of the current session: only a 401
