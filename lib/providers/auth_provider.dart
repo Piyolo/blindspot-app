@@ -82,7 +82,14 @@ class AuthProvider extends ChangeNotifier {
   /// in flight so a screen can show [Copy.serverWaking], e.g. during a
   /// cold Render wake-up. Reset automatically when the in-flight
   /// login/signup settles, success or failure.
+  ///
+  /// Ignored while no auth call is in flight (`busy` false), so a stray
+  /// invocation — e.g. another repository wired to this hook — can never
+  /// strand the waking banner outside an auth request.
   void notifyRetrying() {
+    if (!_busy) {
+      return;
+    }
     _retryingNetwork = true;
     notifyListeners();
   }
@@ -91,6 +98,10 @@ class AuthProvider extends ChangeNotifier {
   /// with no network call; a corrupt or unreadable store signs out too —
   /// this method never throws, so an airplane-mode relaunch lands on
   /// Welcome instead of crashing.
+  ///
+  /// The no-cache path is deterministic about in-memory state: any token
+  /// left over from an earlier call in the same process is cleared, so
+  /// `signedOut` always means "no token installed".
   Future<void> restoreSession() async {
     CachedSession? cached;
     try {
@@ -100,6 +111,8 @@ class AuthProvider extends ChangeNotifier {
       cached = null;
     }
     if (cached == null) {
+      _client.authToken = null;
+      _user = null;
       _status = AuthStatus.signedOut;
     } else {
       _client.authToken = cached.token;
@@ -109,7 +122,8 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Signs in; on success persists token + user and goes signed in.
+  /// Signs in; on success goes signed in and persists token + user
+  /// best-effort (a failing store never fails a successful login).
   /// On failure nothing is persisted, the status is untouched, and
   /// [lastError] carries copy-deck text mapped from the status code.
   Future<bool> login({required String email, required String password}) =>
@@ -147,11 +161,20 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
     try {
       final result = await call();
-      // Persist first: a failed attempt must leave storage untouched.
-      await _session.save(token: result.accessToken, user: result.user);
+      // The server accepted the credentials: sign in in memory first —
+      // authoritative and independent of storage — then persist
+      // best-effort. A failed attempt still leaves storage untouched (it
+      // never reaches this point), and a failed *write* must not undo or
+      // sour a login that genuinely worked: the session just won't
+      // survive a restart.
       _client.authToken = result.accessToken;
       _user = result.user;
       _status = AuthStatus.signedIn;
+      try {
+        await _session.save(token: result.accessToken, user: result.user);
+      } catch (_) {
+        // Best-effort persistence; nothing further to do.
+      }
       return true;
     } on ApiException catch (error) {
       _lastError = _errorFor(error, isSignup: isSignup);
@@ -185,12 +208,20 @@ class AuthProvider extends ChangeNotifier {
   }
 
   /// Clears the cached session and the client token, going signed out.
+  ///
+  /// In-memory state changes first; the storage clear is best-effort and
+  /// never throws — a failing store must not trap the user signed in.
   Future<void> signOut() async {
-    await _session.clear();
     _client.authToken = null;
     _user = null;
     _status = AuthStatus.signedOut;
     notifyListeners();
+    try {
+      await _session.clear();
+    } catch (_) {
+      // Best-effort: the app is signed out regardless; a stale cache
+      // entry (if any survived) is retried on the next clear/restore.
+    }
   }
 
   /// Applies an updated user (e.g. after a profile edit) without touching

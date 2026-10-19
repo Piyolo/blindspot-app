@@ -89,6 +89,19 @@ class ThrowingSessionRepository extends SessionRepository {
   Future<CachedSession?> load() => throw Exception('store unavailable');
 }
 
+/// [SecureStore] where every operation fails, to prove a dead store never
+/// traps the user signed in (or fails a login the server accepted).
+class ThrowingSecureStore implements SecureStore {
+  @override
+  Future<String?> read(String key) => throw Exception('store down');
+
+  @override
+  Future<void> write(String key, String value) => throw Exception('store down');
+
+  @override
+  Future<void> delete(String key) => throw Exception('store down');
+}
+
 final AuthResult _cannedAuthResult = AuthResult(
   accessToken: 'tok-abc',
   user: User(
@@ -156,6 +169,9 @@ void main() {
   );
 
   test('restoreSession without cache -> signedOut, no network call', () async {
+    // A stale in-memory token from an earlier call in the same process
+    // must not survive a restore that finds no cache (F1).
+    client.authToken = 'stale-token';
     final provider = build();
     expect(provider.status, AuthStatus.unknown);
 
@@ -168,6 +184,7 @@ void main() {
   });
 
   test('restoreSession with a corrupt cached entry -> signedOut', () async {
+    client.authToken = 'stale-token';
     await store.write(TokenStore.storageKey, 'tok-123');
     await store.write(SessionRepository.userKey, 'not json {{{');
     final provider = build();
@@ -182,12 +199,14 @@ void main() {
   });
 
   test('restoreSession never throws when the session store fails', () async {
+    client.authToken = 'stale-token';
     final provider = build(sessionRepo: ThrowingSessionRepository());
 
     await provider.restoreSession();
 
     expect(provider.status, AuthStatus.signedOut);
     expect(provider.user, isNull);
+    expect(client.authToken, isNull);
   });
 
   test('login success persists token+user and sets client authToken', () async {
@@ -212,10 +231,9 @@ void main() {
   });
 
   test('login 401 -> signedOut with loginError, nothing persisted', () async {
-    repo.error = const ApiException(
-      'Invalid email or password.',
-      statusCode: 401,
-    );
+    // Deliberately NOT the copy-deck string: a provider that forwarded the
+    // raw server `detail` would fail this test (F3).
+    repo.error = const ApiException('RAW-SERVER-401-DETAIL', statusCode: 401);
     final provider = await signedInProvider();
     await provider.signOut();
 
@@ -308,8 +326,99 @@ void main() {
     },
   );
 
+  test(
+    'retryingNetwork flip notifies listeners (screen repaint source)',
+    () async {
+      final fake = FakeAuthRepository(networkFailures: 1);
+      final provider = build(auth: fake);
+      await provider.restoreSession();
+      final seenFlags = <bool>[];
+      provider.addListener(() => seenFlags.add(provider.retryingNetwork));
+      fake.onRetry = provider.notifyRetrying;
+
+      final ok = await provider.login(
+        email: 'ana@example.com',
+        password: 'password1',
+      );
+
+      expect(ok, isTrue);
+      // One notification fired with the flag set (banner shows) and the
+      // settle notification with it cleared (banner hides).
+      expect(seenFlags, contains(true));
+      expect(seenFlags.last, isFalse);
+    },
+  );
+
+  test('notifyRetrying while idle does not flip retryingNetwork', () {
+    final provider = build();
+    var notified = 0;
+    provider.addListener(() => notified += 1);
+
+    provider.notifyRetrying();
+
+    // No auth call is in flight: the waking state must not stick, and no
+    // listener churn should occur.
+    expect(provider.retryingNetwork, isFalse);
+    expect(notified, 0);
+  });
+
+  test(
+    'signup network error -> offline copy, retryingNetwork true during the retry, false on settle',
+    () async {
+      final fake = FakeAuthRepository(networkFailures: 2);
+      var flagDuringRetry = false;
+      final provider = build(auth: fake);
+      await provider.restoreSession();
+      fake.onRetry = provider.notifyRetrying;
+      fake.onRetryAttempt = () => flagDuringRetry = provider.retryingNetwork;
+
+      final ok = await provider.signup(
+        name: 'Ana Cruz',
+        email: 'ana@example.com',
+        password: 'password1',
+        contactNumber: '09171234567',
+      );
+
+      expect(ok, isFalse);
+      expect(fake.signupCalls, 1, reason: 'one provider-visible call');
+      expect(fake.attempts, 2, reason: 'first attempt + the single retry');
+      expect(flagDuringRetry, isTrue);
+      expect(provider.lastError, Copy.offline);
+      expect(provider.retryingNetwork, isFalse);
+      expect(provider.busy, isFalse);
+    },
+  );
+
+  test(
+    'signup network error that succeeds on retry -> signedIn, flag cleared',
+    () async {
+      final fake = FakeAuthRepository(networkFailures: 1);
+      var flagDuringRetry = false;
+      final provider = build(auth: fake);
+      fake.onRetry = provider.notifyRetrying;
+      fake.onRetryAttempt = () => flagDuringRetry = provider.retryingNetwork;
+
+      final ok = await provider.signup(
+        name: 'Ana Cruz',
+        email: 'ana@example.com',
+        password: 'password1',
+        contactNumber: '09171234567',
+      );
+
+      expect(ok, isTrue);
+      expect(fake.signupCalls, 1);
+      expect(fake.attempts, 2);
+      expect(flagDuringRetry, isTrue);
+      expect(provider.status, AuthStatus.signedIn);
+      expect(provider.retryingNetwork, isFalse);
+      expect(provider.lastError, isNull);
+    },
+  );
+
   test('login 429 -> rateLimited copy', () async {
-    repo.error = const ApiException('Too many requests.', statusCode: 429);
+    // Raw sentinel, not Copy.rateLimited: proves the mapping, not a
+    // passthrough (F3).
+    repo.error = const ApiException('RAW-SERVER-429-DETAIL', statusCode: 429);
     final provider = build();
 
     final ok = await provider.login(
@@ -323,8 +432,9 @@ void main() {
 
   test('login 400 / 500 / malformed-2xx -> genericError copy', () async {
     for (final status in <int>[400, 500, 200]) {
+      // Raw sentinel, not Copy.genericError: proves the mapping (F3).
       repo.error = ApiException(
-        'Unexpected server response',
+        'RAW-SERVER-UNEXPECTED-DETAIL',
         statusCode: status,
       );
       final provider = build();
@@ -357,10 +467,9 @@ void main() {
 
     // A fresh signed-out state (the successful signup above cached a session).
     await session.clear();
-    repo.error = const ApiException(
-      'This email is already registered. Try logging in.',
-      statusCode: 409,
-    );
+    // Raw sentinel, not the copy-deck string: proves 409 is *mapped* to
+    // Copy.emailExists, not forwarded (F3).
+    repo.error = const ApiException('RAW-SERVER-409-DETAIL', statusCode: 409);
     final second = build();
     await second.restoreSession();
     final failed = await second.signup(
@@ -423,6 +532,51 @@ void main() {
     expect(await store.read(TokenStore.storageKey), isNull);
     expect(await store.read(SessionRepository.userKey), isNull);
   });
+
+  test(
+    'successful login with a failing store ends signedIn, token set, no error',
+    () async {
+      final provider = AuthProvider(
+        auth: repo,
+        session: SessionRepository(ThrowingSecureStore()),
+        client: client,
+      );
+
+      final ok = await provider.login(
+        email: 'ana@example.com',
+        password: 'password1',
+      );
+
+      // The server accepted the credentials: a dead store must not undo
+      // the sign-in, throw, or surface an error for a login that worked.
+      expect(ok, isTrue);
+      expect(provider.status, AuthStatus.signedIn);
+      expect(provider.user?.email, 'mock@example.com');
+      expect(client.authToken, 'mock-access-token');
+      expect(provider.lastError, isNull);
+      expect(provider.busy, isFalse);
+      expect(provider.retryingNetwork, isFalse);
+    },
+  );
+
+  test(
+    'signOut never throws and signs out even when the store clear fails',
+    () async {
+      final provider = AuthProvider(
+        auth: repo,
+        session: SessionRepository(ThrowingSecureStore()),
+        client: client,
+      );
+      await provider.login(email: 'ana@example.com', password: 'password1');
+      expect(provider.status, AuthStatus.signedIn);
+
+      await provider.signOut(); // must not throw
+
+      expect(provider.status, AuthStatus.signedOut);
+      expect(provider.user, isNull);
+      expect(client.authToken, isNull);
+    },
+  );
 
   test(
     'handleUnauthorized(401) clears the cached session -> signedOut',

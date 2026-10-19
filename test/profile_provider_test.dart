@@ -134,10 +134,9 @@ void main() {
   test(
     'profile 401 -> handleUnauthorized cleared the cached session',
     () async {
-      repo.error = const ApiException(
-        'Invalid email or password.',
-        statusCode: 401,
-      );
+      // Raw sentinel, not the copy-deck string: this path signs out rather
+      // than mapping a message, and must never forward the server detail.
+      repo.error = const ApiException('RAW-SERVER-401-DETAIL', statusCode: 401);
 
       final ok = await profile.updateContact('09181112222');
 
@@ -145,6 +144,9 @@ void main() {
       expect(auth.status, AuthStatus.signedOut);
       expect(auth.user, isNull);
       expect(client.authToken, isNull);
+      // Ratified: Task 12 sources its one-time notice from the status
+      // transition, so lastError stays untouched here.
+      expect(profile.lastError, isNull);
       await pumpEventQueue();
       expect(await store.read(TokenStore.storageKey), isNull);
       expect(await store.read(SessionRepository.userKey), isNull);
