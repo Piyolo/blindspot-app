@@ -1,10 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'tokens.dart';
 
 /// Theme factory for BlindSpot.
 class AppTheme {
   const AppTheme._();
+
+  /// Status-bar overlay for the app's dark surface: dark background with
+  /// light (white) icons — Phase 0 rendered the status bar light against
+  /// the dark app (the pinned on-device fix). `elevated` is the app's
+  /// chrome color, so the bar blends with the AppBar directly beneath it
+  /// on the signed-in screens instead of fighting the cream/blue identity.
+  static const SystemUiOverlayStyle statusBarStyle = SystemUiOverlayStyle(
+    statusBarColor: AppColors.elevated,
+    statusBarIconBrightness: Brightness.light,
+    statusBarBrightness: Brightness.dark,
+  );
 
   static ThemeData dark() {
     return ThemeData(
@@ -20,6 +32,7 @@ class AppTheme {
         foregroundColor: AppColors.onSurface,
         elevation: 0,
         centerTitle: false,
+        systemOverlayStyle: statusBarStyle,
       ),
       textTheme: TextTheme(
         displayLarge: AppTextStyles.display,
