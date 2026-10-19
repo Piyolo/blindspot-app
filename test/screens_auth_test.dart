@@ -75,8 +75,9 @@ class PermissionsStub extends StatelessWidget {
       const Scaffold(body: Text(Copy.permissionsTitle));
 }
 
-/// Records every `SemanticsService.announce` message sent over the
-/// accessibility channel, so tests can assert the announced copy.
+/// Records every announcement message sent over the accessibility channel
+/// (`SemanticsService.sendAnnouncement`), so tests can assert the announced
+/// copy.
 List<String> recordAnnouncements(WidgetTester tester) {
   final messages = <String>[];
   tester.binding.defaultBinaryMessenger.setMockMessageHandler(
@@ -274,6 +275,39 @@ void main() {
       expect(find.byType(LoginScreen), findsOneWidget);
     });
 
+    testWidgets('the login-error text is a live region', (tester) async {
+      repo.error = const ApiException('bad credentials', statusCode: 401);
+
+      await pumpAuthScreen(tester, provider: auth, home: const LoginScreen());
+      await enterLoginCredentials(tester);
+      await tester.tap(find.widgetWithText(ElevatedButton, Copy.logIn));
+      await tester.pumpAndSettle();
+
+      final SemanticsNode error =
+          tester.getSemantics(find.text(Copy.loginError));
+      expect(error.flagsCollection.isLiveRegion, isTrue);
+    });
+
+    testWidgets('the waking banner is a live region', (tester) async {
+      final GatedAuthRepository gated = GatedAuthRepository();
+      auth = buildAuth(repository: gated);
+
+      await pumpAuthScreen(tester, provider: auth, home: const LoginScreen());
+      await enterLoginCredentials(tester);
+      await tester.tap(find.widgetWithText(ElevatedButton, Copy.logIn));
+      await tester.pump();
+
+      auth.notifyRetrying();
+      await tester.pump();
+
+      final SemanticsNode banner =
+          tester.getSemantics(find.text(Copy.serverWaking));
+      expect(banner.flagsCollection.isLiveRegion, isTrue);
+
+      gated.loginGate.completeError(const ApiException('offline'));
+      await tester.pumpAndSettle();
+    });
+
     testWidgets(
         'waking banner appears after 5 s of a pending submit and clears '
         'when it settles', (tester) async {
@@ -365,6 +399,56 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets(
+        'a submit that settles after the banner showed leaves no timer and '
+        'the banner stays gone', (tester) async {
+      final GatedAuthRepository gated = GatedAuthRepository();
+      auth = buildAuth(repository: gated);
+
+      await pumpAuthScreen(tester, provider: auth, home: const LoginScreen());
+      await enterLoginCredentials(tester);
+      await tester.tap(find.widgetWithText(ElevatedButton, Copy.logIn));
+      await tester.pump(const Duration(seconds: 5));
+
+      // The banner is up: the 5 s timer has already fired once.
+      expect(find.text(Copy.serverWaking), findsOneWidget);
+
+      gated.loginGate.completeError(const ApiException('bad', statusCode: 401));
+      await tester.pumpAndSettle();
+
+      expect(find.text(Copy.serverWaking), findsNothing);
+      expect(find.text(Copy.loginError), findsOneWidget);
+      expect(tester.hasRunningAnimations, isFalse);
+
+      // Well past the 5 s mark again: a surviving timer would re-arm the
+      // banner (and the binding's teardown would report a pending timer).
+      await tester.pump(const Duration(seconds: 30));
+      expect(find.text(Copy.serverWaking), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+        'disposing the screen with the banner visible does not throw and '
+        'the banner does not survive', (tester) async {
+      final GatedAuthRepository gated = GatedAuthRepository();
+      auth = buildAuth(repository: gated);
+
+      await pumpAuthScreen(tester, provider: auth, home: const LoginScreen());
+      await enterLoginCredentials(tester);
+      await tester.tap(find.widgetWithText(ElevatedButton, Copy.logIn));
+      await tester.pump(const Duration(seconds: 5));
+
+      expect(find.text(Copy.serverWaking), findsOneWidget);
+
+      // Navigate away mid-pending with the banner up; the gate is never
+      // completed, so nothing can settle the submit.
+      await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+      await tester.pump(const Duration(seconds: 30));
+
+      expect(find.text(Copy.serverWaking), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('two rapid taps issue exactly one login call', (tester) async {
       final GatedAuthRepository gated = GatedAuthRepository();
       auth = buildAuth(repository: gated);
@@ -390,8 +474,7 @@ void main() {
   });
 
   group('SignupScreen', () {
-    testWidgets(
-        'a bad password shows the password-rule copy and never calls the '
+    testWidgets('a bad password shows the password-rule copy and never calls the '
         'repository', (tester) async {
       final List<String> announcements = recordAnnouncements(tester);
 
@@ -404,6 +487,30 @@ void main() {
       expect(repo.signupCalls, 0);
       expect(announcements, contains(Copy.passwordRule));
       expect(find.byType(SignupScreen), findsOneWidget);
+    });
+
+    testWidgets('a field validation error is a live region', (tester) async {
+      await pumpAuthScreen(tester, provider: auth, home: const SignupScreen());
+      await enterSignupFields(tester, password: 'short', confirm: 'short');
+      await tapSubmit(tester, find.widgetWithText(ElevatedButton, Copy.signUp));
+      await tester.pump();
+
+      final SemanticsNode error =
+          tester.getSemantics(find.text(Copy.passwordRule));
+      expect(error.flagsCollection.isLiveRegion, isTrue);
+    });
+
+    testWidgets('the signup error banner is a live region', (tester) async {
+      repo.error = const ApiException('conflict', statusCode: 409);
+
+      await pumpAuthScreen(tester, provider: auth, home: const SignupScreen());
+      await enterSignupFields(tester);
+      await tapSubmit(tester, find.widgetWithText(ElevatedButton, Copy.signUp));
+      await tester.pumpAndSettle();
+
+      final SemanticsNode error =
+          tester.getSemantics(find.text(Copy.emailExists));
+      expect(error.flagsCollection.isLiveRegion, isTrue);
     });
 
     testWidgets('a confirm mismatch reuses the password-rule copy',

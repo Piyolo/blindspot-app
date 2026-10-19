@@ -10,8 +10,9 @@ import '../theme/tokens.dart';
 ///
 /// The visible [label] is rendered above the field and excluded from
 /// semantics so the field is announced once, with [semanticsLabel].
-/// [errorText] is rendered as text below the field — errors are never
-/// colour-only.
+/// [errorText] is rendered as a live-region text below the field — errors
+/// are never colour-only, and TalkBack reads them when they appear even
+/// where announcement events are deprecated (Android).
 class VoiceField extends StatelessWidget {
   const VoiceField({
     super.key,
@@ -54,9 +55,17 @@ class VoiceField extends StatelessWidget {
           ),
           if (errorText != null) ...[
             const SizedBox(height: 8),
-            Text(
-              errorText!,
-              style: AppTextStyles.body.copyWith(color: AppColors.errorText),
+            // Live region: TalkBack reads the field error the moment it
+            // appears — announcement events are deprecated on Android, so
+            // this is the reliable channel for validation feedback.
+            Semantics(
+              container: true,
+              liveRegion: true,
+              child: Text(
+                errorText!,
+                style:
+                    AppTextStyles.body.copyWith(color: AppColors.errorText),
+              ),
             ),
           ],
         ],

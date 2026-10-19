@@ -69,18 +69,27 @@ class _LoginScreenState extends State<LoginScreen> {
   void _syncWakingBanner() {
     if (_showWaking && !_wakingAnnounced) {
       _wakingAnnounced = true;
-      _announce(Copy.serverWaking);
+      unawaited(_announce(Copy.serverWaking));
     } else if (!_showWaking) {
       _wakingAnnounced = false;
     }
   }
 
-  void _announce(String message) {
-    // Pinned by the Task-9 brief; the replacement
-    // (SemanticsService.sendAnnouncement) sends the identical event but needs
-    // a FlutterView this layer doesn't hold.
-    // ignore: deprecated_member_use
-    SemanticsService.announce(message, Directionality.of(context));
+  /// Announces [message] as a best-effort secondary signal. The primary
+  /// channel is the live region on the visible text: Android has deprecated
+  /// announcement events, so TalkBack on modern Android may ignore them
+  /// entirely. An announcement failure must never fail the screen action
+  /// it accompanies, so errors are swallowed.
+  Future<void> _announce(String message) async {
+    try {
+      await SemanticsService.sendAnnouncement(
+        View.of(context),
+        message,
+        Directionality.of(context),
+      );
+    } catch (_) {
+      // Best-effort by design: the live region already carries the message.
+    }
   }
 
   Future<void> _submit() async {
@@ -114,7 +123,7 @@ class _LoginScreenState extends State<LoginScreen> {
       // `lastError` is already copy-deck text (never a raw server detail).
       final error = _auth.lastError;
       if (error != null) {
-        _announce(error);
+        await _announce(error);
       }
     }
   }
@@ -143,19 +152,31 @@ class _LoginScreenState extends State<LoginScreen> {
                 obscure: true,
               ),
               if (_showWaking) ...[
-                Text(
-                  Copy.serverWaking,
-                  style: AppTextStyles.status.copyWith(
-                    color: AppColors.warning,
+                // Live region: TalkBack reads the banner when it appears,
+                // even where announcement events are deprecated (Android).
+                Semantics(
+                  container: true,
+                  liveRegion: true,
+                  child: Text(
+                    Copy.serverWaking,
+                    style: AppTextStyles.status.copyWith(
+                      color: AppColors.warning,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
               ],
               if (error != null) ...[
-                Text(
-                  error,
-                  style: AppTextStyles.body.copyWith(
-                    color: AppColors.errorText,
+                // Live region: the error is announced the moment it appears,
+                // not only via the best-effort announcement event.
+                Semantics(
+                  container: true,
+                  liveRegion: true,
+                  child: Text(
+                    error,
+                    style: AppTextStyles.body.copyWith(
+                      color: AppColors.errorText,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
