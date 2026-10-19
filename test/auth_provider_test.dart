@@ -654,4 +654,35 @@ void main() {
       expect(client.authToken, isNotNull);
     },
   );
+
+  test('clearError clears lastError and notifies only when it changes',
+      () async {
+    repo.error = const ApiException('conflict', statusCode: 409);
+    final provider = build();
+
+    final bool ok = await provider.signup(
+      name: 'Ana Cruz',
+      email: 'ana@example.com',
+      password: 'password123',
+      contactNumber: '09171234567',
+    );
+
+    expect(ok, isFalse);
+    expect(provider.lastError, Copy.emailExists);
+
+    var notifications = 0;
+    provider.addListener(() => notifications++);
+
+    provider.clearError();
+    expect(provider.lastError, isNull); // cleared synchronously
+    expect(notifications, 0); // ...but the notification is deferred
+    await null; // flush the microtask
+    expect(notifications, 1);
+
+    // Already null: no state change, so no notification.
+    provider.clearError();
+    await null;
+    expect(provider.lastError, isNull);
+    expect(notifications, 1);
+  });
 }

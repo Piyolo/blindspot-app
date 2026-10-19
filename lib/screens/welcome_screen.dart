@@ -6,6 +6,11 @@ import '../widgets/big_action_tile.dart';
 
 /// Signed-out entry point: two big choices (Log in / Sign up) plus the
 /// trusted-person note from the copy deck.
+///
+/// The body scrolls: at large text scales (up to 3x) the content is far
+/// taller than a small phone screen, and the only alternative would be a
+/// hard RenderFlex overflow — a broken screen for a blind user's TalkBack
+/// reading position.
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
 
@@ -13,7 +18,7 @@ class WelcomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -24,7 +29,7 @@ class WelcomeScreen extends StatelessWidget {
                 style: AppTextStyles.bodyLarge,
                 textAlign: TextAlign.center,
               ),
-              const Spacer(),
+              const SizedBox(height: 32),
               BigActionTile(
                 label: Copy.logIn,
                 icon: Icons.login,
@@ -36,7 +41,6 @@ class WelcomeScreen extends StatelessWidget {
                 icon: Icons.person_add,
                 onTap: () => Navigator.of(context).pushNamed('/signup'),
               ),
-              const Spacer(),
             ],
           ),
         ),

@@ -24,7 +24,7 @@ class Copy {
   static const String passwordRule =
       'Password must be at least 8 characters with a letter and a number.';
   static const String emergencyNumberField =
-      'Speak the mobile number, starting with zero nine, or plus six three.';
+      'Mobile number field. Tap to type, or speak it, starting with zero nine, or plus six three.';
   static const String micPermission =
       'BlindSpot needs the microphone to hear your voice commands.';
   static const String cameraPermission =
@@ -72,6 +72,13 @@ class Copy {
       'Enter a valid contact number (7 to 15 digits).';
   static const String genericError =
       'Something went wrong. Please try again.';
+  static const String passwordLabel = 'Password';
+  static const String confirmPasswordLabel = 'Confirm password';
+  static const String confirmPasswordField =
+      'Confirm password field. Characters are hidden.';
+  static const String passwordMismatch = 'The passwords do not match.';
+  static const String emailInvalid = 'Enter a valid email address.';
+  static const String passwordRequired = 'Enter your password.';
 
   /// The one interpolation helper: `Signed in as {name}.`
   static String signedInAs(String name) => 'Signed in as $name.';
@@ -93,7 +100,7 @@ class CopyFil {
   static const String passwordRule =
       'Ang password ay dapat hindi bababa sa 8 karakter, at may titik at numero.';
   static const String emergencyNumberField =
-      'Sabihin ang mobile number, magsisimula sa zero nine, o plus six three.';
+      'Mobile number field. Pindutin para mag-type, o sabihin, simula sa zero nine, o plus six three.';
   static const String micPermission =
       'Kailangan ng BlindSpot ang mikropono para marinig ang iyong mga utos.';
   static const String cameraPermission =
@@ -142,6 +149,13 @@ class CopyFil {
   static const String contactInvalid =
       'Maglagay ng tamang contact number (7 hanggang 15 na numero).';
   static const String genericError = 'May problema. Subukan ulit.';
+  static const String passwordLabel = 'Password';
+  static const String confirmPasswordLabel = 'Confirm password';
+  static const String confirmPasswordField =
+      'Confirm password field. Nakatago ang mga karakter.';
+  static const String passwordMismatch = 'Hindi tugma ang mga password.';
+  static const String emailInvalid = 'Maglagay ng tamang email address.';
+  static const String passwordRequired = 'Ilagay ang password mo.';
 
   /// The one interpolation helper: `Naka-log in bilang {name}.`
   static String signedInAs(String name) => 'Naka-log in bilang $name.';

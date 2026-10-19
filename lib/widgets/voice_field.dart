@@ -10,6 +10,11 @@ import '../theme/tokens.dart';
 ///
 /// The visible [label] is rendered above the field and excluded from
 /// semantics so the field is announced once, with [semanticsLabel].
+/// The wrapper carries ONLY the label: it must never set `textField: true`,
+/// because a flagged wrapper and the editable node underneath it become two
+/// separate TalkBack stops — a dead labelled node followed by an unlabelled
+/// edit box. With the plain label, semantics merge onto the editable node,
+/// which then reads label + value + editable actions as a single stop.
 /// [errorText] is rendered as a live-region text below the field — errors
 /// are never colour-only, and TalkBack reads them when they appear even
 /// where announcement events are deprecated (Android).
@@ -43,7 +48,6 @@ class VoiceField extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Semantics(
-            textField: true,
             label: semanticsLabel,
             child: TextField(
               controller: controller,

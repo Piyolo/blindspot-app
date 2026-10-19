@@ -11,7 +11,7 @@ import 'package:blindspot_app/constants/copy.dart';
 /// enumerate static members (`dart:mirrors` is unavailable), so the
 /// actual values are pulled into maps explicitly below.
 ///
-/// 40 string keys per language + the `signedInAs(name)` helper = the 41
+/// 46 string keys per language + the `signedInAs(name)` helper = the 47
 /// pinned Phase-1 keys.
 void main() {
   const Map<String, String> expectedEn = <String, String>{
@@ -24,7 +24,7 @@ void main() {
     'passwordRule':
         'Password must be at least 8 characters with a letter and a number.',
     'emergencyNumberField':
-        'Speak the mobile number, starting with zero nine, or plus six three.',
+        'Mobile number field. Tap to type, or speak it, starting with zero nine, or plus six three.',
     'micPermission':
         'BlindSpot needs the microphone to hear your voice commands.',
     'cameraPermission':
@@ -64,6 +64,13 @@ void main() {
     'allow': 'Allow',
     'contactInvalid': 'Enter a valid contact number (7 to 15 digits).',
     'genericError': 'Something went wrong. Please try again.',
+    // Phase-1 additions, fix round 2 (pinned)
+    'passwordLabel': 'Password',
+    'confirmPasswordLabel': 'Confirm password',
+    'confirmPasswordField': 'Confirm password field. Characters are hidden.',
+    'passwordMismatch': 'The passwords do not match.',
+    'emailInvalid': 'Enter a valid email address.',
+    'passwordRequired': 'Enter your password.',
   };
 
   const Map<String, String> expectedFil = <String, String>{
@@ -76,7 +83,7 @@ void main() {
     'passwordRule':
         'Ang password ay dapat hindi bababa sa 8 karakter, at may titik at numero.',
     'emergencyNumberField':
-        'Sabihin ang mobile number, magsisimula sa zero nine, o plus six three.',
+        'Mobile number field. Pindutin para mag-type, o sabihin, simula sa zero nine, o plus six three.',
     'micPermission':
         'Kailangan ng BlindSpot ang mikropono para marinig ang iyong mga utos.',
     'cameraPermission':
@@ -117,6 +124,13 @@ void main() {
     'contactInvalid':
         'Maglagay ng tamang contact number (7 hanggang 15 na numero).',
     'genericError': 'May problema. Subukan ulit.',
+    // Phase-1 additions, fix round 2 (pinned)
+    'passwordLabel': 'Password',
+    'confirmPasswordLabel': 'Confirm password',
+    'confirmPasswordField': 'Confirm password field. Nakatago ang mga karakter.',
+    'passwordMismatch': 'Hindi tugma ang mga password.',
+    'emailInvalid': 'Maglagay ng tamang email address.',
+    'passwordRequired': 'Ilagay ang password mo.',
   };
 
   // Actual values: every Copy/CopyFil string key referenced explicitly, so
@@ -163,6 +177,12 @@ void main() {
     'allow': Copy.allow,
     'contactInvalid': Copy.contactInvalid,
     'genericError': Copy.genericError,
+    'passwordLabel': Copy.passwordLabel,
+    'confirmPasswordLabel': Copy.confirmPasswordLabel,
+    'confirmPasswordField': Copy.confirmPasswordField,
+    'passwordMismatch': Copy.passwordMismatch,
+    'emailInvalid': Copy.emailInvalid,
+    'passwordRequired': Copy.passwordRequired,
   };
 
   const Map<String, String> actualFil = <String, String>{
@@ -206,12 +226,18 @@ void main() {
     'allow': CopyFil.allow,
     'contactInvalid': CopyFil.contactInvalid,
     'genericError': CopyFil.genericError,
+    'passwordLabel': CopyFil.passwordLabel,
+    'confirmPasswordLabel': CopyFil.confirmPasswordLabel,
+    'confirmPasswordField': CopyFil.confirmPasswordField,
+    'passwordMismatch': CopyFil.passwordMismatch,
+    'emailInvalid': CopyFil.emailInvalid,
+    'passwordRequired': CopyFil.passwordRequired,
   };
 
   group('Phase-1 copy deck', () {
-    test('the table pins all 40 string keys, in both languages', () {
-      expect(expectedEn.length, 40);
-      expect(expectedFil.length, 40);
+    test('the table pins all 46 string keys, in both languages', () {
+      expect(expectedEn.length, 46);
+      expect(expectedFil.length, 46);
       expect(expectedEn.keys.toSet(), expectedFil.keys.toSet());
       expect(actualEn.keys.toSet(), expectedEn.keys.toSet());
       expect(actualFil.keys.toSet(), expectedFil.keys.toSet());

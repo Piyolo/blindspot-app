@@ -17,7 +17,7 @@ const Duration _wakingDelay = Duration(seconds: 5);
 
 /// Signed-out account creation: name, email, password, confirm, contact
 /// number. Client-side validation covers exactly the rules the copy deck
-/// has strings for — the password rule, the confirm mismatch (same
+/// has strings for — the password rule, the confirm mismatch (its own
 /// copy), and the contact-number range — before anything reaches the
 /// repository; the contact number is normalized to the server's
 /// canonical form on the way out.
@@ -51,6 +51,9 @@ class _SignupScreenState extends State<SignupScreen> {
   void initState() {
     super.initState();
     _auth = context.read<AuthProvider>();
+    // A failure from a previous screen (e.g. a 401 on Login) must never
+    // render as a live-region error on a freshly opened Signup.
+    _auth.clearError();
     _auth.addListener(_onAuthChanged);
   }
 
@@ -106,19 +109,25 @@ class _SignupScreenState extends State<SignupScreen> {
 
   /// Validates the fields the copy deck has messages for, setting each
   /// field's error text. Returns the first error — announced by the
-  /// caller — or null when the input is clean.
-  String? _validate() {
+  /// caller, but only when [changed] says some field's error text
+  /// actually differs from what was already on screen (so a double-tap
+  /// on the same invalid input does not announce the same sentence
+  /// twice) — or null when the input is clean.
+  ({String? error, bool changed}) _validate() {
+    final String? previousPasswordError = _passwordError;
+    final String? previousConfirmError = _confirmError;
+    final String? previousContactError = _contactError;
     final password = _password.text;
     final String? passwordError =
         isValidPassword(password) ? null : Copy.passwordRule;
-    // A confirm mismatch reuses the password-rule copy (pinned) and is
-    // shown on the confirm field, which is where the fix belongs; if the
-    // rule itself fails, that error is reported on the password field.
+    // A confirm mismatch gets its own copy, shown on the confirm field —
+    // where the fix belongs; if the rule itself fails, that error is
+    // reported on the password field.
     final String? confirmError;
     if (passwordError != null || _confirm.text == password) {
       confirmError = null;
     } else {
-      confirmError = Copy.passwordRule;
+      confirmError = Copy.passwordMismatch;
     }
     final contactError = isValidContactNumber(_contact.text)
         ? null
@@ -128,16 +137,24 @@ class _SignupScreenState extends State<SignupScreen> {
       _confirmError = confirmError;
       _contactError = contactError;
     });
-    return passwordError ?? confirmError ?? contactError;
+    final bool changed = passwordError != previousPasswordError ||
+        confirmError != previousConfirmError ||
+        contactError != previousContactError;
+    return (
+      error: passwordError ?? confirmError ?? contactError,
+      changed: changed,
+    );
   }
 
   Future<void> _submit() async {
     if (_auth.busy) {
       return;
     }
-    final validationError = _validate();
-    if (validationError != null) {
-      await _announce(validationError);
+    final (:error, :changed) = _validate();
+    if (error != null) {
+      if (changed) {
+        await _announce(error);
+      }
       return;
     }
     _wakingTimer?.cancel();
@@ -197,15 +214,15 @@ class _SignupScreenState extends State<SignupScreen> {
                 keyboardType: TextInputType.emailAddress,
               ),
               VoiceField(
-                label: Copy.passwordField,
+                label: Copy.passwordLabel,
                 semanticsLabel: Copy.passwordField,
                 controller: _password,
                 obscure: true,
                 errorText: _passwordError,
               ),
               VoiceField(
-                label: Copy.passwordField,
-                semanticsLabel: Copy.passwordField,
+                label: Copy.confirmPasswordLabel,
+                semanticsLabel: Copy.confirmPasswordField,
                 controller: _confirm,
                 obscure: true,
                 errorText: _confirmError,
@@ -247,8 +264,11 @@ class _SignupScreenState extends State<SignupScreen> {
                 ),
                 const SizedBox(height: 16),
               ],
-              SizedBox(
-                height: 56,
+              // 56 dp is a minimum height, not a fixed size: at large text
+              // scales the label lays out fully and the control grows
+              // instead of clipping.
+              ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 56),
                 child: ElevatedButton(
                   onPressed: _auth.busy ? null : _submit,
                   child: const Text(Copy.signUp),

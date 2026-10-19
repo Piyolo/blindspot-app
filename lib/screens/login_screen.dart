@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../constants/copy.dart';
 import '../providers/auth_provider.dart';
+import '../services/validation.dart';
 import '../theme/tokens.dart';
 import '../widgets/voice_field.dart';
 
@@ -15,6 +16,11 @@ import '../widgets/voice_field.dart';
 const Duration _wakingDelay = Duration(seconds: 5);
 
 /// Signed-out sign-in: email + password, submit, and a link to Sign up.
+///
+/// Validation runs before anything reaches the repository: an empty or
+/// malformed email and an empty password have copy-deck messages, so a
+/// blank submit never burns a network round trip just to surface
+/// [Copy.genericError].
 ///
 /// The "server is waking up" banner shows while `auth.retryingNetwork`
 /// is true **or** a submit has been in flight for [_wakingDelay] — the
@@ -37,11 +43,16 @@ class _LoginScreenState extends State<LoginScreen> {
   Timer? _wakingTimer;
   bool _pendingByTimer = false;
   bool _wakingAnnounced = false;
+  String? _emailError;
+  String? _passwordError;
 
   @override
   void initState() {
     super.initState();
     _auth = context.read<AuthProvider>();
+    // A failure from a previous screen (e.g. a signup 409) must never
+    // render as a live-region error on a freshly opened Login.
+    _auth.clearError();
     _auth.addListener(_onAuthChanged);
   }
 
@@ -92,8 +103,41 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  /// Client-side validation before anything reaches the repository, plus
+  /// the announcement dedupe: [changed] is true only when some field's
+  /// error text actually differs from what was already on screen, so a
+  /// double-tap on the same invalid input does not make TalkBack read the
+  /// same sentence twice.
+  ({String? error, bool changed}) _validate() {
+    final String? previousEmailError = _emailError;
+    final String? previousPasswordError = _passwordError;
+    final String? emailError = isValidEmail(_email.text.trim())
+        ? null
+        : Copy.emailInvalid;
+    final String? passwordError = _password.text.isEmpty
+        ? Copy.passwordRequired
+        : null;
+    setState(() {
+      _emailError = emailError;
+      _passwordError = passwordError;
+    });
+    final bool changed = emailError != previousEmailError ||
+        passwordError != previousPasswordError;
+    return (error: emailError ?? passwordError, changed: changed);
+  }
+
   Future<void> _submit() async {
     if (_auth.busy) {
+      return;
+    }
+    // Validation errors render immediately (live region on the field) and
+    // are announced only on an error transition; nothing reaches the
+    // repository while the input is invalid.
+    final (:error, :changed) = _validate();
+    if (error != null) {
+      if (changed) {
+        await _announce(error);
+      }
       return;
     }
     _wakingTimer?.cancel();
@@ -144,12 +188,14 @@ class _LoginScreenState extends State<LoginScreen> {
                 semanticsLabel: Copy.loginField,
                 controller: _email,
                 keyboardType: TextInputType.emailAddress,
+                errorText: _emailError,
               ),
               VoiceField(
                 label: Copy.passwordField,
                 semanticsLabel: Copy.passwordField,
                 controller: _password,
                 obscure: true,
+                errorText: _passwordError,
               ),
               if (_showWaking) ...[
                 // Live region: TalkBack reads the banner when it appears,
@@ -181,16 +227,19 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 16),
               ],
-              SizedBox(
-                height: 56,
+              // 56/48 dp are minimum heights, not fixed sizes: at large
+              // text scales the labels lay out fully and the controls
+              // grow instead of clipping.
+              ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 56),
                 child: ElevatedButton(
                   onPressed: _auth.busy ? null : _submit,
                   child: const Text(Copy.logIn),
                 ),
               ),
               const SizedBox(height: 8),
-              SizedBox(
-                height: 48,
+              ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 48),
                 child: TextButton(
                   onPressed: () =>
                       Navigator.of(context).pushNamed('/signup'),

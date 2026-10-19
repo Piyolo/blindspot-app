@@ -115,18 +115,29 @@ void main() {
     required AuthProvider provider,
     required Widget home,
     Map<String, WidgetBuilder> routes = const <String, WidgetBuilder>{},
+    double? textScale,
   }) {
+    final Widget app = MaterialApp(
+      theme: AppTheme.dark(),
+      home: home,
+      routes: <String, WidgetBuilder>{
+        '/permissions': (_) => const PermissionsStub(),
+        ...routes,
+      },
+    );
     return tester.pumpWidget(
       ChangeNotifierProvider<AuthProvider>.value(
         value: provider,
-        child: MaterialApp(
-          theme: AppTheme.dark(),
-          home: home,
-          routes: <String, WidgetBuilder>{
-            '/permissions': (_) => const PermissionsStub(),
-            ...routes,
-          },
-        ),
+        // An override below the View's own MediaQuery wins for every
+        // descendant, so text-scale tests are deterministic without
+        // relying on platform-dispatcher round trips.
+        child: textScale == null
+            ? app
+            : MediaQuery(
+                data: MediaQueryData.fromView(tester.view)
+                    .copyWith(textScaler: TextScaler.linear(textScale)),
+                child: app,
+              ),
       ),
     );
   }
@@ -221,6 +232,79 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(LoginScreen), findsOneWidget);
+    });
+
+    testWidgets('tiles expose isButton in semantics', (tester) async {
+      await pumpAuthScreen(
+        tester,
+        provider: auth,
+        home: const WelcomeScreen(),
+      );
+
+      for (final String label in <String>[Copy.logIn, Copy.signUp]) {
+        final SemanticsNode tile =
+            tester.getSemantics(find.bySemanticsLabel(label));
+        expect(tile.flagsCollection.isButton, isTrue, reason: label);
+      }
+    });
+
+    testWidgets('no overflow at text scales from 1.0x to 3.0x on a small '
+        '320x568 screen', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(320, 568));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      for (final double scale in const <double>[1.0, 1.5, 2.0, 3.0]) {
+        await pumpAuthScreen(
+          tester,
+          provider: auth,
+          home: const WelcomeScreen(),
+          textScale: scale,
+        );
+
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'text scale $scale overflows the 320x568 screen',
+        );
+      }
+    });
+
+    testWidgets('tiles grow with text scale and keep their touch target at '
+        '3x', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(320, 568));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await pumpAuthScreen(
+        tester,
+        provider: auth,
+        home: const WelcomeScreen(),
+        textScale: 1.0,
+      );
+      final double height1x =
+          tester.getSize(find.byType(BigActionTile).first).height;
+      expect(height1x, 56.0); // spec §5.3 pins the 1x height
+      expect(tester.takeException(), isNull);
+
+      await pumpAuthScreen(
+        tester,
+        provider: auth,
+        home: const WelcomeScreen(),
+        textScale: 3.0,
+      );
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: 'the tile label must lay out fully instead of overflowing',
+      );
+
+      final List<Element> tiles =
+          find.byType(BigActionTile).evaluate().toList();
+      for (final Element tile in tiles) {
+        final Size size = tester.getSize(find.byWidget(tile.widget));
+        expect(size.height, greaterThanOrEqualTo(48.0));
+        // Grows past the fixed 1x height: the scaled label is not clipped.
+        expect(size.height, greaterThan(height1x));
+      }
     });
   });
 
@@ -471,6 +555,170 @@ void main() {
       expect(gated.loginCalls, 1);
       expect(find.byType(PermissionsStub), findsOneWidget);
     });
+
+    testWidgets(
+        'each field is a single focusable node with its label, value, and '
+        'editable actions', semanticsEnabled: true, (tester) async {
+      await pumpAuthScreen(tester, provider: auth, home: const LoginScreen());
+      await enterLoginCredentials(tester);
+      await tester.pump();
+
+      final List<SemanticsNode> traversal =
+          tester.semantics.simulatedAccessibilityTraversal().toList();
+
+      // Exactly one stop per field — a labelled dead node beside an
+      // unlabelled edit box reads the field twice to TalkBack.
+      final List<SemanticsNode> fields = traversal
+          .where((SemanticsNode n) => n.flagsCollection.isTextField)
+          .toList(growable: false);
+      expect(fields, hasLength(2));
+
+      final SemanticsNode email =
+          traversal.singleWhere((n) => n.label == Copy.loginField);
+      expect(email.flagsCollection.isTextField, isTrue);
+      expect(email.value, 'ana@example.com');
+      expect(
+        email.getSemanticsData().hasAction(SemanticsAction.tap),
+        isTrue,
+      );
+
+      final SemanticsNode password =
+          traversal.singleWhere((n) => n.label == Copy.passwordField);
+      expect(password.flagsCollection.isTextField, isTrue);
+      expect(password.flagsCollection.isObscured, isTrue);
+      expect(password.value, isNotEmpty);
+      expect(
+        password.getSemanticsData().hasAction(SemanticsAction.tap),
+        isTrue,
+      );
+
+      // No unlabelled editable stop survives beside a labelled one.
+      expect(fields.where((n) => n.label.isEmpty), isEmpty);
+    });
+
+    testWidgets('the submit control exposes isButton in semantics',
+        (tester) async {
+      await pumpAuthScreen(tester, provider: auth, home: const LoginScreen());
+
+      final SemanticsNode submit =
+          tester.getSemantics(find.widgetWithText(ElevatedButton, Copy.logIn));
+      expect(submit.flagsCollection.isButton, isTrue);
+    });
+
+    testWidgets('a stale signup error does not leak into a freshly opened '
+        'LoginScreen', (tester) async {
+      repo.error = const ApiException('conflict', statusCode: 409);
+
+      await pumpAuthScreen(
+        tester,
+        provider: auth,
+        home: const SignupScreen(),
+        routes: <String, WidgetBuilder>{
+          '/login': (_) => const LoginScreen(),
+        },
+      );
+      await enterSignupFields(tester);
+      await tapSubmit(tester, find.widgetWithText(ElevatedButton, Copy.signUp));
+      await tester.pumpAndSettle();
+
+      expect(find.text(Copy.emailExists), findsOneWidget);
+
+      // Replace Signup with Login the way the flow actually gets there.
+      tester
+          .state<NavigatorState>(find.byType(Navigator))
+          .pushReplacementNamed('/login');
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LoginScreen), findsOneWidget);
+      expect(find.text(Copy.emailExists), findsNothing);
+      expect(auth.lastError, isNull);
+    });
+
+    testWidgets('a malformed email fails validation before any provider '
+        'call', (tester) async {
+      final List<String> announcements = recordAnnouncements(tester);
+
+      await pumpAuthScreen(tester, provider: auth, home: const LoginScreen());
+      await enterLoginCredentials(tester, email: 'not-an-email');
+      await tester.tap(find.widgetWithText(ElevatedButton, Copy.logIn));
+      await tester.pump();
+
+      expect(find.text(Copy.emailInvalid), findsOneWidget);
+      expect(repo.loginCalls, 0);
+      expect(find.byType(LoginScreen), findsOneWidget);
+      expect(announcements, contains(Copy.emailInvalid));
+      expect(
+        tester
+            .getSemantics(find.text(Copy.emailInvalid))
+            .flagsCollection
+            .isLiveRegion,
+        isTrue,
+      );
+    });
+
+    testWidgets('an empty password fails validation before any provider '
+        'call', (tester) async {
+      final List<String> announcements = recordAnnouncements(tester);
+
+      await pumpAuthScreen(tester, provider: auth, home: const LoginScreen());
+      await enterLoginCredentials(tester, password: '');
+      await tester.tap(find.widgetWithText(ElevatedButton, Copy.logIn));
+      await tester.pump();
+
+      expect(find.text(Copy.passwordRequired), findsOneWidget);
+      expect(repo.loginCalls, 0);
+      expect(find.byType(LoginScreen), findsOneWidget);
+      expect(announcements, contains(Copy.passwordRequired));
+    });
+
+    testWidgets('the submit control grows with text scale and keeps its '
+        'touch target at 3x', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(320, 568));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await pumpAuthScreen(
+        tester,
+        provider: auth,
+        home: const LoginScreen(),
+        textScale: 1.0,
+      );
+      final double height1x = tester
+          .getSize(find.widgetWithText(ElevatedButton, Copy.logIn))
+          .height;
+      expect(height1x, 56.0);
+
+      await pumpAuthScreen(
+        tester,
+        provider: auth,
+        home: const LoginScreen(),
+        textScale: 3.0,
+      );
+      expect(tester.takeException(), isNull);
+
+      final Size grown = tester
+          .getSize(find.widgetWithText(ElevatedButton, Copy.logIn));
+      expect(grown.height, greaterThanOrEqualTo(48.0));
+      // Grows past the fixed 56 dp instead of clipping the scaled label.
+      expect(grown.height, greaterThan(height1x));
+    });
+
+    testWidgets('disposing mid-submit with the 5 s waking timer still '
+        'pending cancels it', (tester) async {
+      final GatedAuthRepository gated = GatedAuthRepository();
+      auth = buildAuth(repository: gated);
+
+      await pumpAuthScreen(tester, provider: auth, home: const LoginScreen());
+      await enterLoginCredentials(tester);
+      await tester.tap(find.widgetWithText(ElevatedButton, Copy.logIn));
+      await tester.pump(const Duration(seconds: 3));
+
+      // Unmount mid-submit WITHOUT advancing the clock again: a timer that
+      // survived dispose is still pending, and the binding's end-of-test
+      // pending-timer check fails this test.
+      await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+
+      expect(find.byType(LoginScreen), findsNothing);
+    });
   });
 
   group('SignupScreen', () {
@@ -513,7 +761,7 @@ void main() {
       expect(error.flagsCollection.isLiveRegion, isTrue);
     });
 
-    testWidgets('a confirm mismatch reuses the password-rule copy',
+    testWidgets('a confirm mismatch shows the mismatch copy',
         (tester) async {
       await pumpAuthScreen(tester, provider: auth, home: const SignupScreen());
       await enterSignupFields(
@@ -524,7 +772,7 @@ void main() {
       await tapSubmit(tester, find.widgetWithText(ElevatedButton, Copy.signUp));
       await tester.pump();
 
-      expect(find.text(Copy.passwordRule), findsOneWidget);
+      expect(find.text(Copy.passwordMismatch), findsOneWidget);
       expect(repo.signupCalls, 0);
     });
 
@@ -618,6 +866,108 @@ void main() {
 
       expect(gated.signupCalls, 1);
       expect(find.byType(PermissionsStub), findsOneWidget);
+    });
+
+    testWidgets(
+        'each field is a single focusable node with its label and value',
+        semanticsEnabled: true, (tester) async {
+      // The signup form is taller than the default surface: give it room
+      // so every field is visible to the semantics traversal.
+      await tester.binding.setSurfaceSize(const Size(800, 1600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await pumpAuthScreen(tester, provider: auth, home: const SignupScreen());
+      await enterSignupFields(tester);
+      await tester.pump();
+
+      final List<SemanticsNode> traversal =
+          tester.semantics.simulatedAccessibilityTraversal().toList();
+
+      final List<SemanticsNode> fields = traversal
+          .where((SemanticsNode n) => n.flagsCollection.isTextField)
+          .toList(growable: false);
+      expect(fields, hasLength(5)); // one stop per field, not two
+      expect(fields.where((n) => n.label.isEmpty), isEmpty);
+      expect(fields.map((n) => n.label).toSet(), <String>{
+        Copy.nameLabel,
+        Copy.loginField,
+        Copy.passwordField,
+        Copy.confirmPasswordField,
+        Copy.emergencyNumberField,
+      });
+    });
+
+    testWidgets('password and confirm are distinguishable to TalkBack',
+        (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 1600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await pumpAuthScreen(tester, provider: auth, home: const SignupScreen());
+      await enterSignupFields(tester);
+      await tester.pump();
+
+      final List<SemanticsNode> traversal =
+          tester.semantics.simulatedAccessibilityTraversal().toList();
+
+      expect(
+        traversal.where((n) => n.label == Copy.passwordField),
+        hasLength(1),
+      );
+      expect(
+        traversal.where((n) => n.label == Copy.confirmPasswordField),
+        hasLength(1),
+      );
+      // The visible labels differ too, for sighted users and tap-to-label.
+      expect(find.text(Copy.passwordLabel), findsOneWidget);
+      expect(find.text(Copy.confirmPasswordLabel), findsOneWidget);
+    });
+
+    testWidgets('a double-tap on an invalid form announces the error once',
+        (tester) async {
+      final List<String> announcements = recordAnnouncements(tester);
+
+      await pumpAuthScreen(tester, provider: auth, home: const SignupScreen());
+      await enterSignupFields(tester, password: 'short', confirm: 'short');
+
+      final Finder submit = find.widgetWithText(ElevatedButton, Copy.signUp);
+      await tester.ensureVisible(submit);
+      await tester.pumpAndSettle();
+      await tester.tap(submit);
+      await tester.tap(submit);
+      await tester.pump();
+
+      expect(repo.signupCalls, 0);
+      expect(
+        announcements.where((String m) => m == Copy.passwordRule),
+        hasLength(1),
+      );
+    });
+
+    testWidgets(
+        'waking banner appears after 5 s of a pending signup and clears '
+        'when it settles', (tester) async {
+      final GatedAuthRepository gated = GatedAuthRepository();
+      auth = buildAuth(repository: gated);
+      final List<String> announcements = recordAnnouncements(tester);
+
+      await pumpAuthScreen(tester, provider: auth, home: const SignupScreen());
+      await enterSignupFields(tester);
+      await tapSubmit(tester, find.widgetWithText(ElevatedButton, Copy.signUp));
+      await tester.pump();
+
+      expect(find.text(Copy.serverWaking), findsNothing);
+
+      await tester.pump(const Duration(seconds: 5));
+
+      expect(find.text(Copy.serverWaking), findsOneWidget);
+      expect(announcements, contains(Copy.serverWaking));
+
+      gated.signupGate.complete(cannedAuthResult());
+      await tester.pumpAndSettle();
+
+      expect(find.text(Copy.serverWaking), findsNothing);
+      expect(find.byType(PermissionsStub), findsOneWidget);
+      // A leaked 5 s timer would surface in the binding's teardown check.
     });
   });
 }

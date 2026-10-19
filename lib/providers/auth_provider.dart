@@ -67,6 +67,27 @@ class AuthProvider extends ChangeNotifier {
   /// The last auth failure as copy-deck text (never a raw server `detail`).
   String? get lastError => _lastError;
 
+  /// Clears [lastError] without touching any other state, so a failure
+  /// from one screen never renders on the next one (a signup 409 must not
+  /// appear as a live-region error on a freshly opened Login). Screens
+  /// call this from `initState`. Notifies only when there was an error to
+  /// clear, so a clean provider stays silent.
+  ///
+  /// The notification rides a microtask: `initState` runs inside the
+  /// framework's build phase, where a synchronous `notifyListeners()`
+  /// would trip "setState() or markNeedsBuild() called during build" on
+  /// the provider scope (and on any previous screen still mounted). The
+  /// microtask runs as soon as that synchronous work — including the
+  /// build — has finished, while [lastError] itself is already null from
+  /// the moment this method returns.
+  void clearError() {
+    if (_lastError == null) {
+      return;
+    }
+    _lastError = null;
+    scheduleMicrotask(notifyListeners);
+  }
+
   /// True while a login/signup request is in flight; screens disable
   /// submit on it and it guards re-entry (a double submit issues exactly
   /// one request).
