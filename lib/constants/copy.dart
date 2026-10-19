@@ -31,7 +31,8 @@ class Copy {
       'BlindSpot needs the camera to detect objects around you.';
   static const String phonePermission =
       'BlindSpot needs phone access to call your emergency contact.';
-  static const String home = 'Home. Say "start detection", or choose from the menu.';
+  static const String home =
+      'Home. Object detection and voice commands are coming in a later update. For now, choose Profile.';
   static const String loginError = 'Invalid email or password.';
   static const String emailExists =
       'This email is already registered. Try logging in.';
@@ -108,7 +109,7 @@ class CopyFil {
   static const String phonePermission =
       'Kailangan ng BlindSpot ang akses sa telepono para matawagan ang emergency contact mo.';
   static const String home =
-      'Home. Sabihin ang "simulan ang detection", o pumili sa menu.';
+      'Home. Paparating na ang object detection at voice commands sa susunod na update. Sa ngayon, piliin ang Profile.';
   static const String loginError = 'Mali ang email o password.';
   static const String emailExists =
       'Nakarehistro na ang email na ito. Subukang mag-log in.';

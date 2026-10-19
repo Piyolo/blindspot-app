@@ -31,7 +31,8 @@ void main() {
         'BlindSpot needs the camera to detect objects around you.',
     'phonePermission':
         'BlindSpot needs phone access to call your emergency contact.',
-    'home': 'Home. Say "start detection", or choose from the menu.',
+    'home':
+        'Home. Object detection and voice commands are coming in a later update. For now, choose Profile.',
     'loginError': 'Invalid email or password.',
     'emailExists': 'This email is already registered. Try logging in.',
     'offline': 'No internet connection.',
@@ -90,7 +91,8 @@ void main() {
         'Kailangan ng BlindSpot ang kamera para matukoy ang mga bagay sa paligid mo.',
     'phonePermission':
         'Kailangan ng BlindSpot ang akses sa telepono para matawagan ang emergency contact mo.',
-    'home': 'Home. Sabihin ang "simulan ang detection", o pumili sa menu.',
+    'home':
+        'Home. Paparating na ang object detection at voice commands sa susunod na update. Sa ngayon, piliin ang Profile.',
     'loginError': 'Mali ang email o password.',
     'emailExists': 'Nakarehistro na ang email na ito. Subukang mag-log in.',
     'offline': 'Walang koneksyon sa internet.',
