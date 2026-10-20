@@ -18,6 +18,7 @@ import 'package:blindspot_app/repositories/profile_repository.dart';
 import 'package:blindspot_app/repositories/session_repository.dart';
 import 'package:blindspot_app/screens/home_screen.dart';
 import 'package:blindspot_app/screens/profile_screen.dart';
+import 'package:blindspot_app/screens/welcome_screen.dart';
 import 'package:blindspot_app/services/api_client.dart';
 import 'package:blindspot_app/services/secure_store.dart';
 import 'package:blindspot_app/services/token_store.dart';
@@ -32,6 +33,20 @@ class WelcomeStub extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       const Scaffold(body: Center(child: Text(Copy.welcome)));
+}
+
+/// Stand-in for the Home route beneath Profile, so stack-clearing exits
+/// are observable: with a real route underneath, a plain `pushReplacement`
+/// would leave Home below Welcome and `canPop()` would stay true — the
+/// zombie-Home defect (F2). Absence checks must pass `skipOffstage: false`,
+/// because a route beneath the top is offstage and the default finder
+/// never sees it.
+class HomeStub extends StatelessWidget {
+  const HomeStub({super.key});
+
+  @override
+  Widget build(BuildContext context) =>
+      const Scaffold(body: Center(child: Text(Copy.home)));
 }
 
 /// Records every announcement message sent over the accessibility channel
@@ -124,6 +139,33 @@ void main() {
     );
   }
 
+  /// Pumps the real route order around Profile — a Home route underneath,
+  /// Profile pushed on top — so stack-clearing exits (logout / 401) are
+  /// observable: on this stack a plain `pushReplacement` would leave Home
+  /// beneath Welcome and `canPop()` would stay true (the F2 zombie-Home
+  /// defect).
+  Future<void> pumpProfileStacked(WidgetTester tester) async {
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<AuthProvider>.value(value: auth),
+          ChangeNotifierProvider<ProfileProvider>.value(value: profile),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.dark(),
+          home: const HomeStub(),
+          routes: <String, WidgetBuilder>{
+            '/profile': (_) => const ProfileScreen(),
+            '/welcome': (_) => const WelcomeStub(),
+          },
+        ),
+      ),
+    );
+    tester.state<NavigatorState>(find.byType(Navigator)).pushNamed('/profile');
+    await tester.pumpAndSettle();
+    expect(find.byType(ProfileScreen), findsOneWidget);
+  }
+
   setUp(() async {
     store = InMemorySecureStore();
     final SessionRepository session = SessionRepository(store);
@@ -180,14 +222,17 @@ void main() {
 
     testWidgets(
       'saving a normalized contact calls the provider once, shows and '
-      'announces the saved copy, and the field follows the refreshed '
-      'user',
+      'announces the saved copy exactly once, and the field follows the '
+      'SERVER value (F6)',
       (tester) async {
-        repo.user = buildUser(contactNumber: '09181112222');
+        // The server's canonical answer is deliberately DIFFERENT from
+        // the submitted number (raw and normalized), so the field can be
+        // proven to follow the refreshed user, not the local fallback.
+        repo.user = buildUser(contactNumber: '09199998888');
         final List<String> announcements = recordAnnouncements(tester);
 
         await pumpProfile(tester);
-        await tester.enterText(contactField(), '0918-111-2222');
+        await tester.enterText(contactField(), '0917-111-2222');
         await tapControl(
           tester,
           find.widgetWithText(ElevatedButton, Copy.save),
@@ -195,9 +240,13 @@ void main() {
 
         expect(repo.updateProfileCalls, 1);
         // Normalized to the canonical form BEFORE reaching the provider.
-        expect(repo.lastContactNumber, '09181112222');
+        expect(repo.lastContactNumber, '09171112222');
         expect(find.text(Copy.savedContact), findsOneWidget);
-        expect(announcements, contains(Copy.savedContact));
+        // Exactly once, not merely "somewhere in the stream" (F6).
+        expect(
+          announcements.where((String m) => m == Copy.savedContact),
+          hasLength(1),
+        );
         expect(
           tester
               .getSemantics(find.text(Copy.savedContact))
@@ -205,10 +254,12 @@ void main() {
               .isLiveRegion,
           isTrue,
         );
-        // The displayed value comes from the provider's refreshed user.
+        // The displayed value comes from the provider's refreshed user —
+        // the SERVER's value, which differs from what was submitted.
         final TextField contact = tester.widget<TextField>(contactField());
-        expect(contact.controller!.text, '09181112222');
-        expect(auth.user?.contactNumber, '09181112222');
+        expect(contact.controller!.text, '09199998888');
+        expect(contact.controller!.text, isNot('09171112222'));
+        expect(auth.user?.contactNumber, '09199998888');
       },
     );
 
@@ -378,7 +429,11 @@ void main() {
 
         expect(repo.changePasswordCalls, 1);
         expect(find.text(Copy.passwordChanged), findsOneWidget);
-        expect(announcements, contains(Copy.passwordChanged));
+        // Exactly once, not merely "somewhere in the stream" (F6).
+        expect(
+          announcements.where((String m) => m == Copy.passwordChanged),
+          hasLength(1),
+        );
         expect(
           tester
               .getSemantics(find.text(Copy.passwordChanged))
@@ -431,24 +486,36 @@ void main() {
       expect(await store.read(TokenStore.storageKey), 'tok-123');
     });
 
-    testWidgets('answering "Yes" clears the session and lands on /welcome', (
-      tester,
-    ) async {
-      await pumpProfile(tester);
-      await tapControl(tester, find.bySemanticsLabel(Copy.logOut));
-      await tester.tap(find.widgetWithText(TextButton, Copy.yes));
-      await tester.pumpAndSettle();
+    testWidgets(
+      'answering "Yes" clears the session, lands on /welcome, and empties '
+      'the whole stack',
+      (tester) async {
+        await pumpProfileStacked(tester);
+        await tapControl(tester, find.bySemanticsLabel(Copy.logOut));
+        await tester.tap(find.widgetWithText(TextButton, Copy.yes));
+        await tester.pumpAndSettle();
 
-      expect(auth.status, AuthStatus.signedOut);
-      expect(auth.user, isNull);
-      expect(await store.read(TokenStore.storageKey), isNull);
-      expect(find.byType(WelcomeStub), findsOneWidget);
-      expect(find.byType(ProfileScreen), findsNothing);
-    });
+        expect(auth.status, AuthStatus.signedOut);
+        expect(auth.user, isNull);
+        expect(await store.read(TokenStore.storageKey), isNull);
+        expect(find.byType(WelcomeStub), findsOneWidget);
+        expect(find.byType(ProfileScreen), findsNothing);
+        // The WHOLE stack is cleared (F2): back from Welcome cannot reach
+        // a zombie Home whose Profile tile would open a sessionless screen.
+        // skipOffstage: false: a route left BENEATH the top is offstage,
+        // so the default finder could never fail here — this proves the
+        // stack is really emptied (F2).
+        expect(find.byType(HomeStub, skipOffstage: false), findsNothing);
+        expect(
+          tester.state<NavigatorState>(find.byType(Navigator)).canPop(),
+          isFalse,
+        );
+      },
+    );
 
     testWidgets(
       'a 401 on a contact save announces the login-error copy once and '
-      'replaces the screen with /welcome',
+      'clears the whole stack into /welcome',
       (tester) async {
         repo.error = const ApiException(
           'RAW-SERVER-401-DETAIL',
@@ -456,7 +523,7 @@ void main() {
         );
         final List<String> announcements = recordAnnouncements(tester);
 
-        await pumpProfile(tester);
+        await pumpProfileStacked(tester);
         await tester.enterText(contactField(), '09181112222');
         await tapControl(
           tester,
@@ -465,9 +532,17 @@ void main() {
 
         expect(auth.status, AuthStatus.signedOut);
         expect(find.byType(WelcomeStub), findsOneWidget);
-        // pushReplacement: back from Welcome cannot return to a signed-in
-        // screen.
         expect(find.byType(ProfileScreen), findsNothing);
+        // The WHOLE stack is cleared (F2), so back from Welcome cannot
+        // return to a signed-in-looking screen.
+        // skipOffstage: false: a route left BENEATH the top is offstage,
+        // so the default finder could never fail here — this proves the
+        // stack is really emptied (F2).
+        expect(find.byType(HomeStub, skipOffstage: false), findsNothing);
+        expect(
+          tester.state<NavigatorState>(find.byType(Navigator)).canPop(),
+          isFalse,
+        );
         expect(
           announcements.where((String m) => m == Copy.loginError),
           hasLength(1),
@@ -483,7 +558,7 @@ void main() {
       repo.error = const ApiException('RAW-SERVER-401-DETAIL', statusCode: 401);
       final List<String> announcements = recordAnnouncements(tester);
 
-      await pumpProfile(tester);
+      await pumpProfileStacked(tester);
       await tester.enterText(currentPasswordField(), 'oldpassword1');
       await tester.enterText(newPasswordField(), 'password2');
       await tester.enterText(confirmPasswordField(), 'password2');
@@ -495,6 +570,13 @@ void main() {
       expect(auth.status, AuthStatus.signedOut);
       expect(find.byType(WelcomeStub), findsOneWidget);
       expect(find.byType(ProfileScreen), findsNothing);
+      // skipOffstage: false — proves Home is removed, not merely hidden
+      // beneath Welcome (F2).
+      expect(find.byType(HomeStub, skipOffstage: false), findsNothing);
+      expect(
+        tester.state<NavigatorState>(find.byType(Navigator)).canPop(),
+        isFalse,
+      );
       expect(
         announcements.where((String m) => m == Copy.loginError),
         hasLength(1),
@@ -542,6 +624,26 @@ void main() {
       });
     });
 
+    testWidgets('"Change password" is a navigable heading, not a control, '
+        'and the action button is a separate button node', (tester) async {
+      await pumpProfile(tester);
+
+      // The section label (the first "Change password" in tree order) is
+      // a heading TalkBack can navigate by — never announced as a
+      // button (F4).
+      final Finder headingFinder = find.text(Copy.changePasswordLabel).first;
+      final SemanticsNode heading = tester.getSemantics(headingFinder);
+      expect(heading.flagsCollection.isHeader, isTrue);
+      expect(heading.flagsCollection.isButton, isFalse);
+
+      // The action control keeps its own label and button semantics.
+      final SemanticsNode button = tester.getSemantics(
+        find.widgetWithText(ElevatedButton, Copy.changePasswordLabel),
+      );
+      expect(button.flagsCollection.isButton, isTrue);
+      expect(button.flagsCollection.isHeader, isFalse);
+    });
+
     testWidgets('the screen survives 1.0x-3.0x text scale on a 320x568 '
         'screen without overflow or clipped labels', (tester) async {
       await tester.binding.setSurfaceSize(const Size(320, 568));
@@ -555,26 +657,68 @@ void main() {
           isNull,
           reason: 'text scale $scale overflows the 320x568 screen',
         );
+        // F5: takeException only catches layout exceptions — inspect the
+        // rendered paragraphs themselves, so a silently clipped or
+        // ellipsized label would fail here too.
+        final Iterable<RenderParagraph> paragraphs = tester
+            .renderObjectList<RenderParagraph>(find.byType(Text));
+        expect(paragraphs, isNotEmpty);
+        for (final RenderParagraph paragraph in paragraphs) {
+          expect(
+            paragraph.didExceedMaxLines,
+            isFalse,
+            reason:
+                'text scale $scale clips '
+                '"${paragraph.text.toPlainText()}"',
+          );
+        }
       }
     });
 
-    testWidgets('every on-stage status-bar region carries the shared dark '
-        'style', (tester) async {
+    testWidgets('the logout confirm dialog survives 3.0x text scale on '
+        '320x568 without overflow or clipping', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(320, 568));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await pumpProfile(tester, textScale: 3.0);
+      await tester.ensureVisible(find.bySemanticsLabel(Copy.logOut));
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel(Copy.logOut));
+      await tester.pumpAndSettle();
+
+      expect(find.text(Copy.logoutConfirm), findsOneWidget);
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: 'the confirm dialog overflows at 3.0x on 320x568',
+      );
+      final Iterable<RenderParagraph> paragraphs = tester
+          .renderObjectList<RenderParagraph>(find.byType(Text));
+      for (final RenderParagraph paragraph in paragraphs) {
+        expect(
+          paragraph.didExceedMaxLines,
+          isFalse,
+          reason: 'the dialog clips "${paragraph.text.toPlainText()}" at 3.0x',
+        );
+      }
+    });
+
+    testWidgets("the screen's own AnnotatedRegion above the Scaffold carries "
+        'the shared dark status-bar style', (tester) async {
       await pumpProfile(tester);
 
-      final List<AnnotatedRegion<SystemUiOverlayStyle>> regions = tester
-          .widgetList<AnnotatedRegion<SystemUiOverlayStyle>>(
-            find.byType(AnnotatedRegion<SystemUiOverlayStyle>),
-          )
-          .toList(growable: false);
-      expect(
-        regions,
-        isNotEmpty,
-        reason: 'the profile screen carries no status-bar style',
+      // F3: the screen's OWN region — the only AnnotatedRegion that is an
+      // ANCESTOR of the Scaffold. The AppBar also reports an equal-valued
+      // region from inside the tree, so an all-regions check passed even
+      // without the screen's own fix; this ancestor-scoped finder fails
+      // when the screen's region is removed.
+      final AnnotatedRegion<SystemUiOverlayStyle> region = tester.widget(
+        find.ancestor(
+          of: find.byType(Scaffold),
+          matching: find.byType(AnnotatedRegion<SystemUiOverlayStyle>),
+        ),
       );
-      for (final AnnotatedRegion<SystemUiOverlayStyle> region in regions) {
-        expect(region.value, AppTheme.statusBarStyle);
-      }
+      expect(region.value, AppTheme.statusBarStyle);
     });
   });
 
@@ -623,6 +767,47 @@ void main() {
 
       expect(find.byType(ProfileScreen), findsOneWidget);
       expect(find.text('Ana Cruz'), findsOneWidget);
+    });
+
+    testWidgets('a signed-out Home cannot reach a sessionless Profile: the '
+        'Profile tile redirects to /welcome and clears the stack (F2)', (
+      tester,
+    ) async {
+      final InMemorySecureStore seeded = InMemorySecureStore();
+      await seeded.write(TokenStore.storageKey, 'cached-token');
+      await seeded.write(
+        SessionRepository.userKey,
+        jsonEncode(buildUser().toJson()),
+      );
+
+      await pumpApp(tester, store: seeded);
+      expect(find.byType(HomeScreen), findsOneWidget);
+
+      // The zombie-Home state the review found: the session dies
+      // underneath a Home that is still on stage (a server-side 401 on
+      // any profile call).
+      final AuthProvider appAuth = tester
+          .element(find.byType(HomeScreen))
+          .read<AuthProvider>();
+      appAuth.handleUnauthorized(401);
+      await tester.pumpAndSettle();
+      expect(find.byType(HomeScreen), findsOneWidget); // still on stage
+
+      await tester.tap(find.bySemanticsLabel(Copy.profileTitle));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(WelcomeScreen), findsOneWidget);
+      expect(find.byType(ProfileScreen), findsNothing);
+      // skipOffstage: false: the old stack's Home must be REMOVED, not
+      // just hidden offstage beneath Welcome (F2).
+      expect(
+        find.byType(HomeScreen, skipOffstage: false),
+        findsNothing,
+      ); // stack cleared
+      expect(
+        tester.state<NavigatorState>(find.byType(Navigator)).canPop(),
+        isFalse,
+      );
     });
   });
 }

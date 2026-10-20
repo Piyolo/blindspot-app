@@ -31,8 +31,8 @@ import '../widgets/voice_field.dart';
 ///   delegates to `AuthProvider.handleUnauthorized`, which clears the
 ///   session and deliberately leaves `lastError` null. This screen
 ///   sources its one-time [Copy.loginError] notice from that status
-///   transition and routes to `/welcome` with `pushReplacementNamed`, so
-///   back cannot return to a signed-in screen.
+///   transition and clears the whole stack into `/welcome`, so back
+///   cannot return to a signed-in screen.
 /// - A network-level failure (`statusCode == null`) maps to
 ///   [Copy.needInternet]; the edit did not take, so the contact field
 ///   goes back to the cached user's value instead of pretending the new
@@ -126,8 +126,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   /// A 401 means the session itself is dead: announce [Copy.loginError]
   /// exactly once (the [_leaving] flag is set synchronously, before the
-  /// awaited announcement) and replace this screen with `/welcome` — the
-  /// replacement is what keeps back from returning to a signed-in screen.
+  /// awaited announcement) and clear the whole stack into `/welcome`, so
+  /// back cannot return to a signed-in-looking screen.
   Future<void> _leaveAfterSessionExpired() async {
     if (_leaving) {
       return;
@@ -145,7 +145,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (!mounted) {
       return;
     }
-    Navigator.of(context).pushReplacementNamed('/welcome');
+    _exitToWelcome();
+  }
+
+  /// The one way off this screen toward Welcome: removes EVERY route
+  /// before pushing `/welcome`, so back from Welcome can never return to
+  /// a zombie Home whose Profile tile would open a sessionless screen
+  /// (F2 — a plain `pushReplacementNamed` would leave Home beneath
+  /// Welcome). Used by both exits: logout and the dead-session 401.
+  void _exitToWelcome() {
+    Navigator.of(
+      context,
+    ).pushNamedAndRemoveUntil('/welcome', (Route<dynamic> route) => false);
   }
 
   /// Announces [message] as a best-effort secondary signal. The primary
@@ -327,7 +338,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (!mounted) {
       return;
     }
-    Navigator.of(context).pushReplacementNamed('/welcome');
+    _exitToWelcome();
   }
 
   Widget _statusLine(({String text, bool isError}) status) => Semantics(
@@ -401,9 +412,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                const Text(
-                  Copy.changePasswordLabel,
-                  style: AppTextStyles.section,
+                Semantics(
+                  // A navigable, non-interactive section heading for
+                  // TalkBack (F4): the action button below keeps its own
+                  // label and button semantics, so the heading is never
+                  // announced as a button.
+                  header: true,
+                  child: const Text(
+                    Copy.changePasswordLabel,
+                    style: AppTextStyles.section,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 VoiceField(

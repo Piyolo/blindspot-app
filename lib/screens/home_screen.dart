@@ -23,8 +23,10 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // watch, not read: Task 12's Profile screen can change the name via
-    // AuthProvider.replaceUser, and the strip must follow it.
-    final User? user = context.watch<AuthProvider>().user;
+    // AuthProvider.replaceUser, and the strip must follow it. The status
+    // is watched too — see the Profile tile below (F2).
+    final AuthProvider auth = context.watch<AuthProvider>();
+    final User? user = auth.user;
     // The same layer-tree mechanism AppBar uses to keep the dark
     // status-bar background reaching the platform on this AppBar-less
     // screen (see [AppTheme.statusBarStyle]).
@@ -57,7 +59,17 @@ class HomeScreen extends StatelessWidget {
                 BigActionTile(
                   label: Copy.profileTitle,
                   icon: Icons.person,
-                  onTap: () => Navigator.of(context).pushNamed('/profile'),
+                  // A signed-out shell must never open a sessionless
+                  // Profile (F2): when the session died underneath this
+                  // still-on-stage Home (e.g. a server-side 401), the
+                  // tile clears the stack back to Welcome instead of
+                  // pushing /profile.
+                  onTap: auth.status == AuthStatus.signedIn
+                      ? () => Navigator.of(context).pushNamed('/profile')
+                      : () => Navigator.of(context).pushNamedAndRemoveUntil(
+                          '/welcome',
+                          (Route<dynamic> route) => false,
+                        ),
                 ),
                 const SizedBox(height: 24),
                 // The copy deck's home line — no new keys may be added in

@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:blindspot_app/constants/copy.dart';
@@ -100,6 +103,36 @@ class ThrowingSecureStore implements SecureStore {
 
   @override
   Future<void> delete(String key) => throw Exception('store down');
+}
+
+/// [SecureStore] whose writes only settle when the test releases them, so
+/// a profile save's store write can be held in flight across a sign-out
+/// (the F1 delayed-response race). Reads and deletes stay immediate.
+class GatedWriteSecureStore implements SecureStore {
+  GatedWriteSecureStore({Map<String, String>? seed}) : values = {...?seed};
+
+  /// Held write gate: nothing is written until [releaseWrites].
+  final Completer<void> writeGate = Completer<void>();
+
+  /// The raw store contents, so tests can assert what a settled race
+  /// actually left behind.
+  final Map<String, String> values;
+
+  void releaseWrites() => writeGate.complete();
+
+  @override
+  Future<String?> read(String key) async => values[key];
+
+  @override
+  Future<void> write(String key, String value) async {
+    await writeGate.future;
+    values[key] = value;
+  }
+
+  @override
+  Future<void> delete(String key) async {
+    values.remove(key);
+  }
 }
 
 final AuthResult _cannedAuthResult = AuthResult(
@@ -648,68 +681,135 @@ void main() {
       );
       await provider.login(email: 'ana@example.com', password: 'password1');
 
-      await provider.replaceUser(buildUser(name: 'Ana Santos')); // must not throw
+      await provider.replaceUser(
+        buildUser(name: 'Ana Santos'),
+      ); // must not throw
 
       expect(provider.user?.name, 'Ana Santos');
       expect(client.authToken, isNotNull);
     },
   );
 
-  test('clearError clears lastError and notifies only when it changes',
-      () async {
-    repo.error = const ApiException('conflict', statusCode: 409);
-    final provider = build();
+  test(
+    'replaceUser after signOut is a no-op: a stale response never resurrects the session (F1)',
+    () async {
+      final provider = await signedInProvider();
+      await provider.signOut();
 
-    final bool ok = await provider.signup(
-      name: 'Ana Cruz',
-      email: 'ana@example.com',
-      password: 'password123',
-      contactNumber: '09171234567',
-    );
+      // Every listener-visible user from this point on: there must be none.
+      final List<User?> seenUsers = <User?>[];
+      provider.addListener(() => seenUsers.add(provider.user));
 
-    expect(ok, isFalse);
-    expect(provider.lastError, Copy.emailExists);
+      await provider.replaceUser(buildUser(contactNumber: '09181112222'));
 
-    var notifications = 0;
-    provider.addListener(() => notifications++);
+      expect(provider.user, isNull);
+      expect(provider.status, AuthStatus.signedOut);
+      expect(client.authToken, isNull);
+      expect(await store.read(TokenStore.storageKey), isNull);
+      expect(await store.read(SessionRepository.userKey), isNull);
+      // A no-op does not even notify: no listener was notified with a user.
+      expect(seenUsers, isEmpty);
+    },
+  );
 
-    provider.clearError();
-    expect(provider.lastError, isNull); // cleared synchronously
-    expect(notifications, 0); // ...but the notification is deferred
-    await null; // flush the microtask
-    expect(notifications, 1);
+  test(
+    'a replaceUser held in flight across signOut cannot resurrect memory or the cached session (F1 delayed)',
+    () async {
+      final GatedWriteSecureStore gated = GatedWriteSecureStore(
+        seed: <String, String>{
+          TokenStore.storageKey: 'tok-123',
+          SessionRepository.userKey: jsonEncode(buildUser().toJson()),
+        },
+      );
+      final AuthProvider provider = AuthProvider(
+        auth: repo,
+        session: SessionRepository(gated),
+        client: client,
+      );
+      await provider.restoreSession();
+      expect(provider.status, AuthStatus.signedIn);
 
-    // Already null: no state change, so no notification.
-    provider.clearError();
-    await null;
-    expect(provider.lastError, isNull);
-    expect(notifications, 1);
-  });
+      // Start the save and hold its store write mid-flight, then sign out
+      // and release the write: the held write must not outlive the
+      // sign-out in memory OR in the store (a stale token+user pair
+      // would resurrect on the next relaunch).
+      final Future<void> pending = provider.replaceUser(
+        buildUser(contactNumber: '09181112222'),
+      );
+      await provider.signOut();
+      final List<User?> seenUsers = <User?>[];
+      provider.addListener(() => seenUsers.add(provider.user));
+      gated.releaseWrites();
+      await pending;
+      await pumpEventQueue();
 
-  test('clearError after dispose in the same turn is silent and safe',
-      () async {
-    repo.error = const ApiException('conflict', statusCode: 409);
-    final provider = build();
-    await provider.signup(
-      name: 'Ana Cruz',
-      email: 'ana@example.com',
-      password: 'password123',
-      contactNumber: '09171234567',
-    );
-    expect(provider.lastError, Copy.emailExists);
+      expect(provider.user, isNull);
+      expect(provider.status, AuthStatus.signedOut);
+      expect(client.authToken, isNull);
+      expect(gated.values, isEmpty);
+      expect(seenUsers, isEmpty);
+    },
+  );
 
-    var notifications = 0;
-    provider.addListener(() => notifications++);
+  test(
+    'clearError clears lastError and notifies only when it changes',
+    () async {
+      repo.error = const ApiException('conflict', statusCode: 409);
+      final provider = build();
 
-    // The disposal race clearError's _disposed guard exists for: dispose,
-    // then clearError in the same turn. The deferred notification must
-    // not reach the (pre-dispose) listener — and must not trip the
-    // ChangeNotifier disposed-assert when its microtask runs.
-    provider.dispose();
-    provider.clearError();
+      final bool ok = await provider.signup(
+        name: 'Ana Cruz',
+        email: 'ana@example.com',
+        password: 'password123',
+        contactNumber: '09171234567',
+      );
 
-    expect(provider.lastError, isNull); // cleared synchronously
-    await null; // flush the deferred microtask
-    expect(notifications, 0);
-  });
+      expect(ok, isFalse);
+      expect(provider.lastError, Copy.emailExists);
+
+      var notifications = 0;
+      provider.addListener(() => notifications++);
+
+      provider.clearError();
+      expect(provider.lastError, isNull); // cleared synchronously
+      expect(notifications, 0); // ...but the notification is deferred
+      await null; // flush the microtask
+      expect(notifications, 1);
+
+      // Already null: no state change, so no notification.
+      provider.clearError();
+      await null;
+      expect(provider.lastError, isNull);
+      expect(notifications, 1);
+    },
+  );
+
+  test(
+    'clearError after dispose in the same turn is silent and safe',
+    () async {
+      repo.error = const ApiException('conflict', statusCode: 409);
+      final provider = build();
+      await provider.signup(
+        name: 'Ana Cruz',
+        email: 'ana@example.com',
+        password: 'password123',
+        contactNumber: '09171234567',
+      );
+      expect(provider.lastError, Copy.emailExists);
+
+      var notifications = 0;
+      provider.addListener(() => notifications++);
+
+      // The disposal race clearError's _disposed guard exists for: dispose,
+      // then clearError in the same turn. The deferred notification must
+      // not reach the (pre-dispose) listener — and must not trip the
+      // ChangeNotifier disposed-assert when its microtask runs.
+      provider.dispose();
+      provider.clearError();
+
+      expect(provider.lastError, isNull); // cleared synchronously
+      await null; // flush the deferred microtask
+      expect(notifications, 0);
+    },
+  );
 }

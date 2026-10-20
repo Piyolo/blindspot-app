@@ -264,15 +264,33 @@ class AuthProvider extends ChangeNotifier {
   /// the token: updates the in-memory user and notifies listeners, then
   /// persists the new user into the session store (keeping the existing
   /// token) best-effort — a failing store never fails a successful edit.
+  ///
+  /// A no-op unless the session is live (`signedIn` with a token
+  /// installed): a save response that lands after [signOut] or
+  /// [handleUnauthorized] can never resurrect the session — no user
+  /// write, no notification, no store write. If the session dies while
+  /// the store write is still settling, the just-written entry is
+  /// removed again so a stale token+user pair cannot outlive the
+  /// sign-out and resurrect on the next relaunch.
   Future<void> replaceUser(User user) async {
-    final token = _client.authToken;
+    final String? token = _client.authToken;
+    if (_status != AuthStatus.signedIn || token == null) {
+      return;
+    }
     _user = user;
     notifyListeners();
-    if (token != null) {
+    try {
+      await _session.save(token: token, user: user);
+    } catch (_) {
+      // Best-effort: the in-memory session is already updated.
+    }
+    if (_status != AuthStatus.signedIn || _client.authToken != token) {
+      // The session died while the store write was in flight; the write
+      // we just made must not outlive it.
       try {
-        await _session.save(token: token, user: user);
+        await _session.clear();
       } catch (_) {
-        // Best-effort: the in-memory session is already updated.
+        // Best-effort, like every other store operation here.
       }
     }
   }
