@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'constants/copy.dart';
 import 'providers/auth_provider.dart';
 import 'providers/profile_provider.dart';
 import 'repositories/auth_repository.dart';
@@ -10,6 +9,7 @@ import 'repositories/session_repository.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/permissions_screen.dart';
+import 'screens/profile_screen.dart';
 import 'screens/signup_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/welcome_screen.dart';
@@ -120,22 +120,10 @@ class BlindSpotApp extends StatelessWidget {
           '/login': (_) => const LoginScreen(),
           '/signup': (_) => const SignupScreen(),
           '/permissions': (_) => PermissionsScreen(service: permissionsService),
-          // Private placeholder: replaced by the real screen in Task 12.
-          '/profile': (_) => const _ProfilePlaceholder(),
+          '/profile': (_) => const ProfileScreen(),
           '/home': (_) => const HomeScreen(),
         },
       ),
     );
   }
-}
-
-/// Stand-in for the Profile screen (Task 12) so Home's Profile tile never
-/// hits a missing route.
-class _ProfilePlaceholder extends StatelessWidget {
-  const _ProfilePlaceholder();
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text(Copy.profileTitle)),
-      );
 }
