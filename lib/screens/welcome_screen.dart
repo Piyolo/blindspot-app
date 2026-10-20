@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../constants/copy.dart';
+import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import '../widgets/big_action_tile.dart';
 
@@ -16,32 +18,40 @@ class WelcomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 24),
-              Text(
-                Copy.welcome,
-                style: AppTextStyles.bodyLarge,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 32),
-              BigActionTile(
-                label: Copy.logIn,
-                icon: Icons.login,
-                onTap: () => Navigator.of(context).pushNamed('/login'),
-              ),
-              const SizedBox(height: 16),
-              BigActionTile(
-                label: Copy.signUp,
-                icon: Icons.person_add,
-                onTap: () => Navigator.of(context).pushNamed('/signup'),
-              ),
-            ],
+    // The same layer-tree mechanism AppBar uses to keep the dark
+    // status-bar background reaching the platform on this AppBar-less
+    // screen: MaterialApp's theme builder re-sends the framework's
+    // colourless SystemUiOverlayStyle.light during every build, and only
+    // an AnnotatedRegion wins over it (see [AppTheme.statusBarStyle]).
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: AppTheme.statusBarStyle,
+      child: Scaffold(
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 24),
+                Text(
+                  Copy.welcome,
+                  style: AppTextStyles.bodyLarge,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 32),
+                BigActionTile(
+                  label: Copy.logIn,
+                  icon: Icons.login,
+                  onTap: () => Navigator.of(context).pushNamed('/login'),
+                ),
+                const SizedBox(height: 16),
+                BigActionTile(
+                  label: Copy.signUp,
+                  icon: Icons.person_add,
+                  onTap: () => Navigator.of(context).pushNamed('/signup'),
+                ),
+              ],
+            ),
           ),
         ),
       ),

@@ -11,7 +11,7 @@ import 'package:blindspot_app/constants/copy.dart';
 /// enumerate static members (`dart:mirrors` is unavailable), so the
 /// actual values are pulled into maps explicitly below.
 ///
-/// 46 string keys per language + the `signedInAs(name)` helper = the 47
+/// 51 string keys per language + the `signedInAs(name)` helper = the 52
 /// pinned Phase-1 keys.
 void main() {
   const Map<String, String> expectedEn = <String, String>{
@@ -72,6 +72,12 @@ void main() {
     'passwordMismatch': 'The passwords do not match.',
     'emailInvalid': 'Enter a valid email address.',
     'passwordRequired': 'Enter your password.',
+    // Task 11 additions (pinned): permission-card labels and states
+    'microphoneLabel': 'Microphone',
+    'cameraLabel': 'Camera',
+    'phoneLabel': 'Phone',
+    'permissionGranted': 'Allowed',
+    'permissionNotGranted': 'Not allowed',
   };
 
   const Map<String, String> expectedFil = <String, String>{
@@ -133,6 +139,12 @@ void main() {
     'passwordMismatch': 'Hindi tugma ang mga password.',
     'emailInvalid': 'Maglagay ng tamang email address.',
     'passwordRequired': 'Ilagay ang password mo.',
+    // Task 11 additions (pinned): permission-card labels and states
+    'microphoneLabel': 'Mikropono',
+    'cameraLabel': 'Camera',
+    'phoneLabel': 'Telepono',
+    'permissionGranted': 'Pinayagan',
+    'permissionNotGranted': 'Hindi pa pinayagan',
   };
 
   // Actual values: every Copy/CopyFil string key referenced explicitly, so
@@ -185,6 +197,11 @@ void main() {
     'passwordMismatch': Copy.passwordMismatch,
     'emailInvalid': Copy.emailInvalid,
     'passwordRequired': Copy.passwordRequired,
+    'microphoneLabel': Copy.microphoneLabel,
+    'cameraLabel': Copy.cameraLabel,
+    'phoneLabel': Copy.phoneLabel,
+    'permissionGranted': Copy.permissionGranted,
+    'permissionNotGranted': Copy.permissionNotGranted,
   };
 
   const Map<String, String> actualFil = <String, String>{
@@ -234,12 +251,17 @@ void main() {
     'passwordMismatch': CopyFil.passwordMismatch,
     'emailInvalid': CopyFil.emailInvalid,
     'passwordRequired': CopyFil.passwordRequired,
+    'microphoneLabel': CopyFil.microphoneLabel,
+    'cameraLabel': CopyFil.cameraLabel,
+    'phoneLabel': CopyFil.phoneLabel,
+    'permissionGranted': CopyFil.permissionGranted,
+    'permissionNotGranted': CopyFil.permissionNotGranted,
   };
 
   group('Phase-1 copy deck', () {
-    test('the table pins all 46 string keys, in both languages', () {
-      expect(expectedEn.length, 46);
-      expect(expectedFil.length, 46);
+    test('the table pins all 51 string keys, in both languages', () {
+      expect(expectedEn.length, 51);
+      expect(expectedFil.length, 51);
       expect(expectedEn.keys.toSet(), expectedFil.keys.toSet());
       expect(actualEn.keys.toSet(), expectedEn.keys.toSet());
       expect(actualFil.keys.toSet(), expectedFil.keys.toSet());

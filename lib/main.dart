@@ -9,20 +9,23 @@ import 'repositories/profile_repository.dart';
 import 'repositories/session_repository.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/permissions_screen.dart';
 import 'screens/signup_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/welcome_screen.dart';
 import 'services/api_client.dart';
+import 'services/permissions_service.dart';
 import 'services/secure_store.dart';
 import 'theme/app_theme.dart';
 
 void main() {
   // The status bar is themed where it actually reaches the platform —
   // see [AppTheme.statusBarStyle]: through the theme's appBarTheme (every
-  // AppBar re-announces it in its own AnnotatedRegion) and through the
-  // splash's AnnotatedRegion. An imperative call here would NOT survive:
-  // MaterialApp's theme builder re-sends SystemUiOverlayStyle.light
-  // (no colour) during build, overriding anything set before runApp.
+  // AppBar re-announces it in its own AnnotatedRegion) and through each
+  // AppBar-less screen's own AnnotatedRegion. An imperative call here
+  // would NOT survive: MaterialApp's theme builder re-sends
+  // SystemUiOverlayStyle.light (no colour) during build, overriding
+  // anything set before runApp.
   runApp(const BlindSpotApp());
 }
 
@@ -88,12 +91,17 @@ class BlindSpotApp extends StatelessWidget {
     this.authRepository,
     this.profileRepository,
     this.secureStore,
+    this.permissionsService,
   });
 
   final ApiClient? client;
   final AuthRepository? authRepository;
   final ProfileRepository? profileRepository;
   final SecureStore? secureStore;
+
+  /// Test seam: production leaves this null and the Permissions screen
+  /// runs the live [PermissionHandlerService].
+  final PermissionsService? permissionsService;
 
   @override
   Widget build(BuildContext context) {
@@ -111,8 +119,7 @@ class BlindSpotApp extends StatelessWidget {
           '/welcome': (_) => const WelcomeScreen(),
           '/login': (_) => const LoginScreen(),
           '/signup': (_) => const SignupScreen(),
-          // Private placeholder: replaced by the real screen in Task 11.
-          '/permissions': (_) => const _PermissionsPlaceholder(),
+          '/permissions': (_) => PermissionsScreen(service: permissionsService),
           // Private placeholder: replaced by the real screen in Task 12.
           '/profile': (_) => const _ProfilePlaceholder(),
           '/home': (_) => const HomeScreen(),
@@ -120,17 +127,6 @@ class BlindSpotApp extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Stand-in for the Permissions screen (Task 11) so the auth flow's
-/// `pushReplacementNamed('/permissions')` never hits a missing route.
-class _PermissionsPlaceholder extends StatelessWidget {
-  const _PermissionsPlaceholder();
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text(Copy.permissionsTitle)),
-      );
 }
 
 /// Stand-in for the Profile screen (Task 12) so Home's Profile tile never

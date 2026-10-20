@@ -80,6 +80,11 @@ class Copy {
   static const String passwordMismatch = 'The passwords do not match.';
   static const String emailInvalid = 'Enter a valid email address.';
   static const String passwordRequired = 'Enter your password.';
+  static const String microphoneLabel = 'Microphone';
+  static const String cameraLabel = 'Camera';
+  static const String phoneLabel = 'Phone';
+  static const String permissionGranted = 'Allowed';
+  static const String permissionNotGranted = 'Not allowed';
 
   /// The one interpolation helper: `Signed in as {name}.`
   static String signedInAs(String name) => 'Signed in as $name.';
@@ -157,6 +162,11 @@ class CopyFil {
   static const String passwordMismatch = 'Hindi tugma ang mga password.';
   static const String emailInvalid = 'Maglagay ng tamang email address.';
   static const String passwordRequired = 'Ilagay ang password mo.';
+  static const String microphoneLabel = 'Mikropono';
+  static const String cameraLabel = 'Camera';
+  static const String phoneLabel = 'Telepono';
+  static const String permissionGranted = 'Pinayagan';
+  static const String permissionNotGranted = 'Hindi pa pinayagan';
 
   /// The one interpolation helper: `Naka-log in bilang {name}.`
   static String signedInAs(String name) => 'Naka-log in bilang $name.';
