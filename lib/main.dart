@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'constants/copy.dart';
@@ -18,20 +17,70 @@ import 'services/secure_store.dart';
 import 'theme/app_theme.dart';
 
 void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-  // AppBar-less screens (Splash, Welcome) have no theme hook for the
-  // status bar, so the dark-surface/light-icons default is set once
-  // globally; AppBar screens re-apply the same style via [AppTheme].
-  SystemChrome.setSystemUIOverlayStyle(AppTheme.statusBarStyle);
+  // The status bar is themed where it actually reaches the platform —
+  // see [AppTheme.statusBarStyle]: through the theme's appBarTheme (every
+  // AppBar re-announces it in its own AnnotatedRegion) and through the
+  // splash's AnnotatedRegion. An imperative call here would NOT survive:
+  // MaterialApp's theme builder re-sends SystemUiOverlayStyle.light
+  // (no colour) during build, overriding anything set before runApp.
   runApp(const BlindSpotApp());
+}
+
+/// Wraps [child] in the provider graph the app installs above the
+/// navigator: ONE shared [ApiClient] (the auth token installed by
+/// [AuthProvider] must be sent along with profile calls too) and one
+/// [SecureStore].
+///
+/// [client], [authRepository], [profileRepository] and [secureStore] are
+/// test seams: production leaves them null and gets the live API client
+/// plus the platform secure store. Extracted verbatim from
+/// [BlindSpotApp.build] so tests verify the retry wiring against the
+/// exact graph the app runs.
+MultiProvider buildAppProviders({
+  required Widget child,
+  ApiClient? client,
+  AuthRepository? authRepository,
+  ProfileRepository? profileRepository,
+  SecureStore? secureStore,
+}) {
+  final ApiClient api = client ?? ApiClient();
+  final SecureStore store = secureStore ?? FlutterSecureStore();
+  return MultiProvider(
+    providers: [
+      ChangeNotifierProvider<AuthProvider>(
+        create: (_) {
+          // The repository's retry hook is fixed at construction, before
+          // this provider exists; the closure only ever runs during a
+          // request — i.e. after `auth` is assigned (see AuthProvider).
+          late final AuthProvider auth;
+          auth = AuthProvider(
+            auth: authRepository ??
+                ApiAuthRepository(api, onRetry: () => auth.notifyRetrying()),
+            session: SessionRepository(store),
+            client: api,
+          );
+          return auth;
+        },
+      ),
+      // Created after AuthProvider so `context.read<AuthProvider>()`
+      // resolves (provider order in the list is the scoping order).
+      // Deliberately NO `onRetry` on the profile repository: the profile
+      // screens have no waking banner in Phase 1, and AuthProvider's
+      // notifyRetrying() guards on busy — an auth-unrelated retry call
+      // could only ever be noise.
+      ChangeNotifierProvider<ProfileProvider>(
+        create: (context) => ProfileProvider(
+          repository: profileRepository ?? ApiProfileRepository(api),
+          auth: context.read<AuthProvider>(),
+        ),
+      ),
+    ],
+    child: child,
+  );
 }
 
 /// Root widget of the BlindSpot app: wires the providers above the
 /// navigator and owns the route table.
-///
-/// The repository/store parameters are test seams — widget tests inject
-/// fakes so no real network or keychain ever runs. Production leaves them
-/// null and gets the live API client plus the platform secure store.
 class BlindSpotApp extends StatelessWidget {
   const BlindSpotApp({
     super.key,
@@ -48,40 +97,11 @@ class BlindSpotApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ONE client for both providers: the auth token installed on it by
-    // AuthProvider must be sent along with profile calls too.
-    final ApiClient api = client ?? ApiClient();
-    final SecureStore store = secureStore ?? FlutterSecureStore();
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider<AuthProvider>(
-          create: (_) {
-            // The repository's retry hook is fixed at construction, before
-            // this provider exists; the closure only ever runs during a
-            // request — i.e. after `auth` is assigned (see AuthProvider).
-            late final AuthProvider auth;
-            auth = AuthProvider(
-              auth: authRepository ??
-                  ApiAuthRepository(api, onRetry: () => auth.notifyRetrying()),
-              session: SessionRepository(store),
-              client: api,
-            );
-            return auth;
-          },
-        ),
-        // Created after AuthProvider so `context.read<AuthProvider>()`
-        // resolves (provider order in the list is the scoping order).
-        // Deliberately NO `onRetry` on the profile repository: the profile
-        // screens have no waking banner in Phase 1, and AuthProvider's
-        // notifyRetrying() guards on busy — an auth-unrelated retry call
-        // could only ever be noise.
-        ChangeNotifierProvider<ProfileProvider>(
-          create: (context) => ProfileProvider(
-            repository: profileRepository ?? ApiProfileRepository(api),
-            auth: context.read<AuthProvider>(),
-          ),
-        ),
-      ],
+    return buildAppProviders(
+      client: client,
+      authRepository: authRepository,
+      profileRepository: profileRepository,
+      secureStore: secureStore,
       child: MaterialApp(
         title: 'BlindSpot',
         theme: AppTheme.dark(),

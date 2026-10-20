@@ -685,4 +685,31 @@ void main() {
     expect(provider.lastError, isNull);
     expect(notifications, 1);
   });
+
+  test('clearError after dispose in the same turn is silent and safe',
+      () async {
+    repo.error = const ApiException('conflict', statusCode: 409);
+    final provider = build();
+    await provider.signup(
+      name: 'Ana Cruz',
+      email: 'ana@example.com',
+      password: 'password123',
+      contactNumber: '09171234567',
+    );
+    expect(provider.lastError, Copy.emailExists);
+
+    var notifications = 0;
+    provider.addListener(() => notifications++);
+
+    // The disposal race clearError's _disposed guard exists for: dispose,
+    // then clearError in the same turn. The deferred notification must
+    // not reach the (pre-dispose) listener — and must not trip the
+    // ChangeNotifier disposed-assert when its microtask runs.
+    provider.dispose();
+    provider.clearError();
+
+    expect(provider.lastError, isNull); // cleared synchronously
+    await null; // flush the deferred microtask
+    expect(notifications, 0);
+  });
 }
