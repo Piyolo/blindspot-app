@@ -108,7 +108,8 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
     if (!mounted) {
       return;
     }
-    Navigator.of(context).pushNamed('/home');
+    // Replace, not push: back from Home must not return to Permissions.
+    Navigator.of(context).pushReplacementNamed('/home');
   }
 
   @override

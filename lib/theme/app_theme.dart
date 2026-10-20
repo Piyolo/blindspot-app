@@ -19,9 +19,9 @@ class AppTheme {
   /// is null) during every build. The effective carriers are layer-tree
   /// `AnnotatedRegion<SystemUiOverlayStyle>`s: every AppBar picks this
   /// style up from [appBarTheme] and re-announces it in its own region,
-  /// and the AppBar-less SplashScreen embeds the same value in its own.
-  /// AppBar-less Welcome/Home still get only the framework's light-icons
-  /// default until they gain an AppBar or their own region.
+  /// and every AppBar-less screen (Splash, Welcome, Home, Permissions)
+  /// embeds the same value in its own region, so the dark bar with light
+  /// icons is consistent across the whole Phase-1 surface.
   static const SystemUiOverlayStyle statusBarStyle = SystemUiOverlayStyle(
     statusBarColor: AppColors.elevated,
     statusBarIconBrightness: Brightness.light,
