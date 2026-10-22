@@ -1,18 +1,19 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:blindspot_app/constants/copy.dart';
 
-/// The complete Phase-1 copy deck, pinned verbatim in both languages.
+/// The complete copy deck (Phases 1 + 2), pinned verbatim in both languages.
 ///
 /// Expected values are transcribed from the brief's tables (spec §11
 /// verbatim set + Phase-1 additions + the `contactInvalid`/`genericError`
-/// ruling keys) and are deliberately NOT derived from `Copy`/`CopyFil`,
-/// so a corrupted deck value fails here. A *missing* key is already caught
-/// by the compiler at every screen reference site; Flutter cannot
-/// enumerate static members (`dart:mirrors` is unavailable), so the
-/// actual values are pulled into maps explicitly below.
+/// ruling keys + the Phase-2 detection deck) and are deliberately NOT
+/// derived from `Copy`/`CopyFil`, so a corrupted deck value fails here. A
+/// *missing* key is already caught by the compiler at every screen
+/// reference site; Flutter cannot enumerate static members
+/// (`dart:mirrors` is unavailable), so the actual values are pulled into
+/// maps explicitly below.
 ///
-/// 51 string keys per language + the `signedInAs(name)` helper = the 52
-/// pinned Phase-1 keys.
+/// 73 string keys per language + the `signedInAs(name)` helper = the 74
+/// pinned keys (51 from Phase 1 + the 22 Phase-2 detection keys).
 void main() {
   const Map<String, String> expectedEn = <String, String>{
     // Spec §11 (EN/FIL pairs)
@@ -78,6 +79,29 @@ void main() {
     'phoneLabel': 'Phone',
     'permissionGranted': 'Allowed',
     'permissionNotGranted': 'Not allowed',
+    // Phase-2 detection additions (pinned by the plan deck)
+    'startDetection': 'Start detection',
+    'detectionTitle': 'Detection',
+    'detectionStarting': 'Starting the camera.',
+    'cameraError': 'The camera could not start.',
+    'retry': 'Try again',
+    'detectionDisclaimer': 'Distances are approximate. Use your own judgment.',
+    'stopDetection': 'Stop detection',
+    'detectionStopped': 'Detection stopped.',
+    'flashOn': 'Flashlight on',
+    'flashOff': 'Flashlight off',
+    'objectsHeading': 'Objects in view',
+    'noObjects': 'No objects detected.',
+    'watching': 'Watching.',
+    'announcementTemplate': '{object} {direction}, {distance}',
+    'directionLeft': 'on the left',
+    'directionAhead': 'ahead',
+    'directionRight': 'on the right',
+    'distanceMetersOne': 'approximately 1 meter',
+    'distanceMetersTemplate': 'approximately {count} meters',
+    'distanceCentimetersTemplate': 'approximately {count} centimeters',
+    'tooCloseTemplate': '{object} is too close.',
+    'objectFallback': 'object',
   };
 
   const Map<String, String> expectedFil = <String, String>{
@@ -145,6 +169,30 @@ void main() {
     'phoneLabel': 'Telepono',
     'permissionGranted': 'Pinayagan',
     'permissionNotGranted': 'Hindi pa pinayagan',
+    // Phase-2 detection additions (pinned by the plan deck)
+    'startDetection': 'Simulan ang detection',
+    'detectionTitle': 'Deteksyon',
+    'detectionStarting': 'Sinisimulan ang camera.',
+    'cameraError': 'Hindi masimulan ang camera.',
+    'retry': 'Subukan muli',
+    'detectionDisclaimer':
+        'Tinatayang distansya lamang ito. Gamitin ang sariling paghuhusga.',
+    'stopDetection': 'Itigil ang detection',
+    'detectionStopped': 'Naitigil ang detection.',
+    'flashOn': 'Buksan ang ilaw',
+    'flashOff': 'Patayin ang ilaw',
+    'objectsHeading': 'Mga bagay na nakikita',
+    'noObjects': 'Walang nakitang bagay.',
+    'watching': 'Nagmamasid.',
+    'announcementTemplate': '{object} {direction}, {distance}',
+    'directionLeft': 'sa kaliwa',
+    'directionAhead': 'sa harap',
+    'directionRight': 'sa kanan',
+    'distanceMetersOne': 'humigit-kumulang 1 metro',
+    'distanceMetersTemplate': 'humigit-kumulang {count} metro',
+    'distanceCentimetersTemplate': 'humigit-kumulang {count} sentimetro',
+    'tooCloseTemplate': 'Masyadong malapit ang {object}.',
+    'objectFallback': 'bagay',
   };
 
   // Actual values: every Copy/CopyFil string key referenced explicitly, so
@@ -202,6 +250,29 @@ void main() {
     'phoneLabel': Copy.phoneLabel,
     'permissionGranted': Copy.permissionGranted,
     'permissionNotGranted': Copy.permissionNotGranted,
+    // Phase-2 detection additions (pinned by the plan deck)
+    'startDetection': Copy.startDetection,
+    'detectionTitle': Copy.detectionTitle,
+    'detectionStarting': Copy.detectionStarting,
+    'cameraError': Copy.cameraError,
+    'retry': Copy.retry,
+    'detectionDisclaimer': Copy.detectionDisclaimer,
+    'stopDetection': Copy.stopDetection,
+    'detectionStopped': Copy.detectionStopped,
+    'flashOn': Copy.flashOn,
+    'flashOff': Copy.flashOff,
+    'objectsHeading': Copy.objectsHeading,
+    'noObjects': Copy.noObjects,
+    'watching': Copy.watching,
+    'announcementTemplate': Copy.announcementTemplate,
+    'directionLeft': Copy.directionLeft,
+    'directionAhead': Copy.directionAhead,
+    'directionRight': Copy.directionRight,
+    'distanceMetersOne': Copy.distanceMetersOne,
+    'distanceMetersTemplate': Copy.distanceMetersTemplate,
+    'distanceCentimetersTemplate': Copy.distanceCentimetersTemplate,
+    'tooCloseTemplate': Copy.tooCloseTemplate,
+    'objectFallback': Copy.objectFallback,
   };
 
   const Map<String, String> actualFil = <String, String>{
@@ -256,12 +327,35 @@ void main() {
     'phoneLabel': CopyFil.phoneLabel,
     'permissionGranted': CopyFil.permissionGranted,
     'permissionNotGranted': CopyFil.permissionNotGranted,
+    // Phase-2 detection additions (pinned by the plan deck)
+    'startDetection': CopyFil.startDetection,
+    'detectionTitle': CopyFil.detectionTitle,
+    'detectionStarting': CopyFil.detectionStarting,
+    'cameraError': CopyFil.cameraError,
+    'retry': CopyFil.retry,
+    'detectionDisclaimer': CopyFil.detectionDisclaimer,
+    'stopDetection': CopyFil.stopDetection,
+    'detectionStopped': CopyFil.detectionStopped,
+    'flashOn': CopyFil.flashOn,
+    'flashOff': CopyFil.flashOff,
+    'objectsHeading': CopyFil.objectsHeading,
+    'noObjects': CopyFil.noObjects,
+    'watching': CopyFil.watching,
+    'announcementTemplate': CopyFil.announcementTemplate,
+    'directionLeft': CopyFil.directionLeft,
+    'directionAhead': CopyFil.directionAhead,
+    'directionRight': CopyFil.directionRight,
+    'distanceMetersOne': CopyFil.distanceMetersOne,
+    'distanceMetersTemplate': CopyFil.distanceMetersTemplate,
+    'distanceCentimetersTemplate': CopyFil.distanceCentimetersTemplate,
+    'tooCloseTemplate': CopyFil.tooCloseTemplate,
+    'objectFallback': CopyFil.objectFallback,
   };
 
-  group('Phase-1 copy deck', () {
-    test('the table pins all 51 string keys, in both languages', () {
-      expect(expectedEn.length, 51);
-      expect(expectedFil.length, 51);
+  group('Copy deck (Phases 1 + 2)', () {
+    test('the table pins all 73 string keys, in both languages', () {
+      expect(expectedEn.length, 73);
+      expect(expectedFil.length, 73);
       expect(expectedEn.keys.toSet(), expectedFil.keys.toSet());
       expect(actualEn.keys.toSet(), expectedEn.keys.toSet());
       expect(actualFil.keys.toSet(), expectedFil.keys.toSet());
@@ -275,6 +369,30 @@ void main() {
 
     test('CopyFil (FIL) matches the pinned table verbatim', () {
       expect(actualFil, expectedFil);
+    });
+
+    test('FIL differs from EN on every translated key — no blanket rule, '
+        'only the deck\'s identical pairs match', () {
+      // The only keys the deck ships byte-identically in both languages:
+      // five Phase-1 names/labels and the language-neutral announcement
+      // template. Everything else must be translated.
+      const Set<String> identicalByDesign = <String>{
+        'profileTitle',
+        'emailLabel',
+        'contactNumberLabel',
+        'passwordLabel',
+        'cameraLabel',
+        'announcementTemplate',
+      };
+      expect(identicalByDesign.difference(expectedEn.keys.toSet()), isEmpty);
+      expect(identicalByDesign.length, 6);
+      for (final String key in expectedEn.keys) {
+        if (identicalByDesign.contains(key)) {
+          expect(actualFil[key], actualEn[key], reason: key);
+        } else {
+          expect(actualFil[key], isNot(actualEn[key]), reason: key);
+        }
+      }
     });
 
     test('signedInAs helper interpolates verbatim in both languages', () {

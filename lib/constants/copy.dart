@@ -1,4 +1,5 @@
-/// The complete Phase-1 copy deck (spec §11 + pinned Phase-1 additions).
+/// The complete copy deck (spec §11 + the pinned Phase-1 and Phase-2
+/// additions).
 ///
 /// Data only — no logic beyond the interpolation helpers. Every
 /// user-facing string rendered in Phase 1 must come from here; no screen
@@ -86,6 +87,33 @@ class Copy {
   static const String permissionGranted = 'Allowed';
   static const String permissionNotGranted = 'Not allowed';
 
+  // --- Phase-2 detection additions (pinned by the plan deck) ---
+
+  static const String startDetection = 'Start detection';
+  static const String detectionTitle = 'Detection';
+  static const String detectionStarting = 'Starting the camera.';
+  static const String cameraError = 'The camera could not start.';
+  static const String retry = 'Try again';
+  static const String detectionDisclaimer =
+      'Distances are approximate. Use your own judgment.';
+  static const String stopDetection = 'Stop detection';
+  static const String detectionStopped = 'Detection stopped.';
+  static const String flashOn = 'Flashlight on';
+  static const String flashOff = 'Flashlight off';
+  static const String objectsHeading = 'Objects in view';
+  static const String noObjects = 'No objects detected.';
+  static const String watching = 'Watching.';
+  static const String announcementTemplate = '{object} {direction}, {distance}';
+  static const String directionLeft = 'on the left';
+  static const String directionAhead = 'ahead';
+  static const String directionRight = 'on the right';
+  static const String distanceMetersOne = 'approximately 1 meter';
+  static const String distanceMetersTemplate = 'approximately {count} meters';
+  static const String distanceCentimetersTemplate =
+      'approximately {count} centimeters';
+  static const String tooCloseTemplate = '{object} is too close.';
+  static const String objectFallback = 'object';
+
   /// The one interpolation helper: `Signed in as {name}.`
   static String signedInAs(String name) => 'Signed in as $name.';
 }
@@ -167,6 +195,33 @@ class CopyFil {
   static const String phoneLabel = 'Telepono';
   static const String permissionGranted = 'Pinayagan';
   static const String permissionNotGranted = 'Hindi pa pinayagan';
+
+  // --- Phase-2 detection additions (pinned by the plan deck) ---
+
+  static const String startDetection = 'Simulan ang detection';
+  static const String detectionTitle = 'Deteksyon';
+  static const String detectionStarting = 'Sinisimulan ang camera.';
+  static const String cameraError = 'Hindi masimulan ang camera.';
+  static const String retry = 'Subukan muli';
+  static const String detectionDisclaimer =
+      'Tinatayang distansya lamang ito. Gamitin ang sariling paghuhusga.';
+  static const String stopDetection = 'Itigil ang detection';
+  static const String detectionStopped = 'Naitigil ang detection.';
+  static const String flashOn = 'Buksan ang ilaw';
+  static const String flashOff = 'Patayin ang ilaw';
+  static const String objectsHeading = 'Mga bagay na nakikita';
+  static const String noObjects = 'Walang nakitang bagay.';
+  static const String watching = 'Nagmamasid.';
+  static const String announcementTemplate = '{object} {direction}, {distance}';
+  static const String directionLeft = 'sa kaliwa';
+  static const String directionAhead = 'sa harap';
+  static const String directionRight = 'sa kanan';
+  static const String distanceMetersOne = 'humigit-kumulang 1 metro';
+  static const String distanceMetersTemplate = 'humigit-kumulang {count} metro';
+  static const String distanceCentimetersTemplate =
+      'humigit-kumulang {count} sentimetro';
+  static const String tooCloseTemplate = 'Masyadong malapit ang {object}.';
+  static const String objectFallback = 'bagay';
 
   /// The one interpolation helper: `Naka-log in bilang {name}.`
   static String signedInAs(String name) => 'Naka-log in bilang $name.';
