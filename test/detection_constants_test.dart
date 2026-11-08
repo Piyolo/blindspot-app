@@ -120,6 +120,7 @@ void main() {
       expect(DetectionConstants.focalLengthPx, 980);
       expect(DetectionConstants.proximityMeters, 0.7);
       expect(DetectionConstants.proximityVibrateMs, 300);
+      expect(DetectionConstants.proximitySoundMs, 1000);
       expect(DetectionConstants.proximityCooldownMs, 3000);
       expect(DetectionConstants.announceChangedLabelMs, 2000);
       expect(DetectionConstants.announceSameLabelMinMs, 4000);

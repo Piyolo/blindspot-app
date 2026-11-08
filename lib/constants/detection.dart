@@ -50,6 +50,10 @@ abstract final class DetectionConstants {
   /// Vibration pulse at alarm start.
   static const int proximityVibrateMs = 300;
 
+  /// Pause between the alarm sound and the spoken too-close warning
+  /// (plan Task 8's "wait 1000 ms").
+  static const int proximitySoundMs = 1000;
+
   /// After the alarm speech, a re-trigger inside this window is ignored.
   static const int proximityCooldownMs = 3000;
 
