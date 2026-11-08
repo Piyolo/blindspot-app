@@ -114,6 +114,7 @@ void main() {
       expect(DetectionConstants.frameMinIntervalMs, 600);
       expect(DetectionConstants.thermalBackoffMs, <int>[1200, 2000]);
       expect(DetectionConstants.thermalSlowMs, 350);
+      expect(DetectionConstants.thermalFastMs, 250);
       expect(DetectionConstants.thermalRecoverMs, 10000);
       expect(DetectionConstants.motionSize, 112);
       expect(DetectionConstants.motionMad, 18);

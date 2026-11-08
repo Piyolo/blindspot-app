@@ -31,6 +31,10 @@ abstract final class DetectionConstants {
   /// thermal ladder (two consecutive slow frames escalate a tier).
   static const int thermalSlowMs = 350;
 
+  /// Processing faster than this counts as a "fast frame" for the
+  /// thermal ladder's recovery streak (plan Task 10's "< 250 ms").
+  static const int thermalFastMs = 250;
+
   /// Continuously fast processing for this long steps the tier back down.
   static const int thermalRecoverMs = 10000;
 
