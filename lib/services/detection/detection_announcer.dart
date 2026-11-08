@@ -3,9 +3,8 @@ import 'dart:math';
 import 'package:blindspot_app/constants/copy.dart';
 import 'package:blindspot_app/constants/detection.dart';
 import 'package:blindspot_app/models/detection.dart';
-import 'package:blindspot_app/services/detection/depth_estimator.dart';
+import 'package:blindspot_app/services/detection/detection_phrase.dart';
 import 'package:blindspot_app/services/tts_service.dart';
-import 'package:blindspot_app/utils/template.dart';
 
 /// Turns a frame's detections into one spoken announcement (plan Task 7,
 /// spec §6.1).
@@ -79,7 +78,10 @@ class DetectionAnnouncer {
         priority: SpeechPriority.detection,
       );
     }
-    await _tts.speak(_phraseFor(candidate), priority: SpeechPriority.detection);
+    await _tts.speak(
+      detectionPhrase(candidate),
+      priority: SpeechPriority.detection,
+    );
   }
 
   /// Starts a new screen session: the next announcement re-arms the
@@ -132,45 +134,5 @@ class DetectionAnnouncer {
       return elapsedMs < _sameLabelCooldownMs;
     }
     return elapsedMs < DetectionConstants.announceChangedLabelMs;
-  }
-
-  String _phraseFor(Detection detection) {
-    final String direction = switch (directionFor(detection.box)) {
-      DetectionDirection.left => Copy.directionLeft,
-      DetectionDirection.ahead => Copy.directionAhead,
-      DetectionDirection.right => Copy.directionRight,
-    };
-    final DistancePhrase? distance = distancePhrase(detection.distanceMeters);
-    if (distance == null) {
-      return fillTemplate(_distanceFreeTemplate, <String, String>{
-        'object': detection.label,
-        'direction': direction,
-      });
-    }
-    return fillTemplate(Copy.announcementTemplate, <String, String>{
-      'object': detection.label,
-      'direction': direction,
-      'distance': _distanceText(distance),
-    });
-  }
-
-  /// The announcement template minus its distance clause, so a
-  /// distance-less detection speaks "object ahead" rather than a
-  /// fabricated distance.
-  String get _distanceFreeTemplate =>
-      Copy.announcementTemplate.replaceAll(RegExp(r',?\s*\{distance\}'), '');
-
-  String _distanceText(DistancePhrase phrase) {
-    return switch (phrase) {
-      MetersPhrase(meters: 1) => Copy.distanceMetersOne,
-      MetersPhrase(:final int meters) => fillTemplate(
-        Copy.distanceMetersTemplate,
-        <String, String>{'count': '$meters'},
-      ),
-      CentimetersPhrase(:final int centimeters) => fillTemplate(
-        Copy.distanceCentimetersTemplate,
-        <String, String>{'count': '$centimeters'},
-      ),
-    };
   }
 }
