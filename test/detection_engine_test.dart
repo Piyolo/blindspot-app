@@ -372,7 +372,13 @@ void main() {
         await h.emit(grayPlane(255));
         expect(h.processor.requests, hasLength(1));
 
-        h.advance(300);
+        // 500 ms in is still inside the 600 ms gate; a 450 ms cadence
+        // (the donor's) would accept here, so this pins the spec value.
+        h.advance(200);
+        await h.emit(grayPlane(255));
+        expect(h.processor.requests, hasLength(1));
+
+        h.advance(100);
         await h.emit(grayPlane(255));
         expect(h.processor.requests, hasLength(2));
       },

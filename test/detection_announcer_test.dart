@@ -157,6 +157,17 @@ void main() {
     ]);
   });
 
+  test('keys the cooldown by label, not by the composed phrase', () async {
+    final AnnouncerHarness h = AnnouncerHarness();
+    await h.announcer.onDetections(<Detection>[detection()]);
+    h.advance(3900);
+    await h.announcer.onDetections(<Detection>[detection(distanceMeters: 3.0)]);
+    expect(h.engine.spoken, <String>[
+      Copy.detectionDisclaimer,
+      'Chair ahead, approximately 2 meters',
+    ]);
+  });
+
   test('allows the same label at 4.1 s', () async {
     final AnnouncerHarness h = AnnouncerHarness();
     await h.announcer.onDetections(<Detection>[detection()]);
