@@ -18,13 +18,30 @@ import 'package:blindspot_app/services/token_store.dart';
 import 'package:blindspot_app/theme/app_theme.dart';
 import 'package:blindspot_app/widgets/big_action_tile.dart';
 
-/// Stand-in for the real Profile screen, which lands in Task 12.
+/// Stand-in for the real Profile screen.
 class ProfileStub extends StatelessWidget {
   const ProfileStub({super.key});
 
   @override
   Widget build(BuildContext context) =>
       const Scaffold(body: Center(child: Text(Copy.profileTitle)));
+}
+
+/// Stand-ins for the routes the detection tile may reach.
+class DetectionStub extends StatelessWidget {
+  const DetectionStub({super.key});
+
+  @override
+  Widget build(BuildContext context) =>
+      const Scaffold(body: Center(child: Text('stub-detection')));
+}
+
+class WelcomeStub extends StatelessWidget {
+  const WelcomeStub({super.key});
+
+  @override
+  Widget build(BuildContext context) =>
+      const Scaffold(body: Center(child: Text('stub-welcome')));
 }
 
 void main() {
@@ -50,6 +67,17 @@ void main() {
     return auth;
   }
 
+  /// An empty session store restores to signed-out — no network involved.
+  Future<AuthProvider> signedOutAuth() async {
+    final AuthProvider auth = AuthProvider(
+      auth: MockAuthRepository(),
+      session: SessionRepository(InMemorySecureStore()),
+      client: ApiClient(baseUrl: 'https://example.test'),
+    );
+    await auth.restoreSession();
+    return auth;
+  }
+
   Future<void> pumpHome(
     WidgetTester tester, {
     required AuthProvider auth,
@@ -60,6 +88,8 @@ void main() {
       home: const HomeScreen(),
       routes: <String, WidgetBuilder>{
         '/profile': (_) => const ProfileStub(),
+        '/detection': (_) => const DetectionStub(),
+        '/welcome': (_) => const WelcomeStub(),
       },
     );
     return tester.pumpWidget(
@@ -80,37 +110,47 @@ void main() {
   }
 
   testWidgets(
-      'shows the signed-in status strip, the Profile tile, and the '
-      'future-features line', (tester) async {
-    await pumpHome(tester, auth: await signedInAuth());
+    'shows the signed-in strip, both working tiles, and the home line',
+    (tester) async {
+      await pumpHome(tester, auth: await signedInAuth());
 
-    expect(find.text(Copy.signedInAs('Ana Cruz')), findsOneWidget);
-    expect(find.bySemanticsLabel(Copy.profileTitle), findsOneWidget);
-    // The only working tile in Phase 1: no dead controls for blind users.
-    expect(find.byType(BigActionTile), findsOneWidget);
-    expect(find.text(Copy.home), findsOneWidget);
-  });
+      expect(find.text(Copy.signedInAs('Ana Cruz')), findsOneWidget);
+      expect(find.bySemanticsLabel(Copy.startDetection), findsOneWidget);
+      expect(find.bySemanticsLabel(Copy.profileTitle), findsOneWidget);
+      // The two choices that work in Phase 2: no dead controls for blind
+      // users.
+      expect(find.byType(BigActionTile), findsNWidgets(2));
+      expect(find.text(Copy.home), findsOneWidget);
+    },
+  );
 
   testWidgets('the status strip is a live region', (tester) async {
     await pumpHome(tester, auth: await signedInAuth());
 
-    final SemanticsNode strip =
-        tester.getSemantics(find.text(Copy.signedInAs('Ana Cruz')));
+    final SemanticsNode strip = tester.getSemantics(
+      find.text(Copy.signedInAs('Ana Cruz')),
+    );
     expect(strip.flagsCollection.isLiveRegion, isTrue);
   });
 
-  testWidgets('the Profile tile is a 56 dp button in semantics',
-      (tester) async {
+  testWidgets('the Profile tile is a 56 dp button in semantics', (
+    tester,
+  ) async {
     await pumpHome(tester, auth: await signedInAuth());
 
-    final Size size = tester.getSize(find.byType(BigActionTile));
+    final Finder profileTile = find.widgetWithText(
+      BigActionTile,
+      Copy.profileTitle,
+    );
+    final Size size = tester.getSize(profileTile);
     expect(size.height, greaterThanOrEqualTo(48.0));
     expect(size.width, greaterThanOrEqualTo(48.0));
     // Pinned by spec §5.3: tiles are 56 dp high at 1x.
     expect(size.height, 56.0);
 
-    final SemanticsNode tile =
-        tester.getSemantics(find.bySemanticsLabel(Copy.profileTitle));
+    final SemanticsNode tile = tester.getSemantics(
+      find.bySemanticsLabel(Copy.profileTitle),
+    );
     expect(tile.flagsCollection.isButton, isTrue);
   });
 
@@ -121,6 +161,29 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(ProfileStub), findsOneWidget);
+  });
+
+  testWidgets('the Start detection tile navigates to /detection', (
+    tester,
+  ) async {
+    await pumpHome(tester, auth: await signedInAuth());
+
+    await tester.tap(find.bySemanticsLabel(Copy.startDetection));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(DetectionStub), findsOneWidget);
+  });
+
+  testWidgets('a signed-out Home sends the detection tile to /welcome', (
+    tester,
+  ) async {
+    await pumpHome(tester, auth: await signedOutAuth());
+
+    await tester.tap(find.bySemanticsLabel(Copy.startDetection));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(WelcomeStub), findsOneWidget);
+    expect(find.byType(HomeScreen), findsNothing);
   });
 
   testWidgets('no overflow at text scales from 1.0x to 3.0x on a small '
@@ -145,8 +208,12 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     final AuthProvider auth = await signedInAuth();
+    final Finder profileTile = find.widgetWithText(
+      BigActionTile,
+      Copy.profileTitle,
+    );
     await pumpHome(tester, auth: auth, textScale: 1.0);
-    final double height1x = tester.getSize(find.byType(BigActionTile)).height;
+    final double height1x = tester.getSize(profileTile).height;
     expect(height1x, 56.0);
     expect(tester.takeException(), isNull);
 
@@ -157,7 +224,7 @@ void main() {
       reason: 'the tile label must lay out fully instead of overflowing',
     );
 
-    final Size grown = tester.getSize(find.byType(BigActionTile));
+    final Size grown = tester.getSize(profileTile);
     expect(grown.height, greaterThanOrEqualTo(48.0));
     // Grows past the fixed 1x height: the scaled label is not clipped.
     expect(grown.height, greaterThan(height1x));

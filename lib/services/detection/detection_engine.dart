@@ -36,9 +36,8 @@ class DetectionEngine {
   /// Test seam: replaces the measured MAD with a fixed score. Production
   /// leaves it null and the engine measures the downsampled planes.
   final double Function()? _motionMad;
-  final void Function(List<Detection> detections, FrameResult result)?
-  _onResult;
-  final void Function(DetectionEngineStatus status, String? error)? _onStatus;
+  void Function(List<Detection> detections, FrameResult result)? _onResult;
+  void Function(DetectionEngineStatus status, String? error)? _onStatus;
 
   DetectionEngineStatus _status = DetectionEngineStatus.idle;
   bool _disposed = false;
@@ -56,6 +55,20 @@ class DetectionEngine {
   bool get hasTorch => _camera.hasTorch;
   bool get torchOn => _torchOn;
   Size? get frameSize => _camera.frameSize;
+
+  /// The provider attaches its listeners here after construction; the
+  /// constructor callbacks remain for tests and simple hosts.
+  set onResult(
+    void Function(List<Detection> detections, FrameResult result)? callback,
+  ) {
+    _onResult = callback;
+  }
+
+  set onStatus(
+    void Function(DetectionEngineStatus status, String? error)? callback,
+  ) {
+    _onStatus = callback;
+  }
 
   int get _intervalMs => _tier == 0
       ? DetectionConstants.frameMinIntervalMs

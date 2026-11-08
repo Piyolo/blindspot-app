@@ -9,9 +9,10 @@ import '../theme/app_theme.dart';
 import '../theme/tokens.dart';
 import '../widgets/big_action_tile.dart';
 
-/// Minimal honest Home for Phase 1: the signed-in status strip plus the
-/// one choice that works today — Profile. The other designed tiles appear
-/// as their phases land, so a blind user never meets a dead control.
+/// Minimal honest Home: the signed-in status strip plus the choices that
+/// work today — Start detection and Profile. The other designed tiles
+/// appear as their phases land, so a blind user never meets a dead
+/// control.
 ///
 /// Like Welcome, the body scrolls: at large text scales (up to 3.0x) the
 /// content is far taller than a small phone screen, and the only
@@ -54,16 +55,28 @@ class HomeScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 24),
                 ],
-                // The only working tile in Phase 1; BigActionTile carries the
-                // button semantics, the label, and the 56 dp minimum height.
+                // BigActionTile carries the button semantics, the label,
+                // and the 56 dp minimum height.
+                BigActionTile(
+                  label: Copy.startDetection,
+                  icon: Icons.camera_alt,
+                  // A signed-out shell must never open a camera session
+                  // (F2): when the session died underneath this
+                  // still-on-stage Home (e.g. a server-side 401), the
+                  // tile clears the stack back to Welcome instead.
+                  onTap: auth.status == AuthStatus.signedIn
+                      ? () => Navigator.of(context).pushNamed('/detection')
+                      : () => Navigator.of(context).pushNamedAndRemoveUntil(
+                          '/welcome',
+                          (Route<dynamic> route) => false,
+                        ),
+                ),
+                const SizedBox(height: 16),
                 BigActionTile(
                   label: Copy.profileTitle,
                   icon: Icons.person,
-                  // A signed-out shell must never open a sessionless
-                  // Profile (F2): when the session died underneath this
-                  // still-on-stage Home (e.g. a server-side 401), the
-                  // tile clears the stack back to Welcome instead of
-                  // pushing /profile.
+                  // Same guard as Start detection: never push a sessionless
+                  // Profile.
                   onTap: auth.status == AuthStatus.signedIn
                       ? () => Navigator.of(context).pushNamed('/profile')
                       : () => Navigator.of(context).pushNamedAndRemoveUntil(

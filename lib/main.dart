@@ -6,6 +6,7 @@ import 'providers/profile_provider.dart';
 import 'repositories/auth_repository.dart';
 import 'repositories/profile_repository.dart';
 import 'repositories/session_repository.dart';
+import 'screens/detection_route.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/permissions_screen.dart';
@@ -122,6 +123,9 @@ class BlindSpotApp extends StatelessWidget {
           '/permissions': (_) => PermissionsScreen(service: permissionsService),
           '/profile': (_) => const ProfileScreen(),
           '/home': (_) => const HomeScreen(),
+          // Not app-wide: the route owns the camera for its own lifetime
+          // (see [DetectionRoute]).
+          '/detection': (_) => const DetectionRoute(),
         },
       ),
     );
